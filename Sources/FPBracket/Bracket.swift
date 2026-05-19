@@ -62,9 +62,6 @@ public struct Bracket<E: Error, R> {
     }
 
     /// A pure Bracket that yields `value` with a no-op acquire/dispose.
-    ///
-    /// Equivalent to fp-ts `Bracket.of`. Useful as a starting point for
-    /// monadic composition.
     public static func of(_ value: R) -> Bracket<E, R> {
         Bracket(acquireResource: {
             .success(Resource(value: value, release: { .success(()) }))
