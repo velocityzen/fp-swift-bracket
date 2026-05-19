@@ -4,8 +4,6 @@ A monadic acquire / use / release pattern for Swift's `Result` and async `Result
 
 ## Overview
 
-`FPBracket` ports the [fp-ts `Bracket`](https://github.com/velocityzen/fp-ts-bracket)
-pattern to Swift on top of [fp-swift](https://github.com/velocityzen/fp-swift).
 It packages a resource's lifecycle — acquire, use, release — into a reusable
 value that is also a monad, so resources compose by `flatMap`.
 

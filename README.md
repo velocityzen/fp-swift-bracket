@@ -3,7 +3,7 @@
 [![Swift](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Fvelocityzen%2Ffp-swift-bracket%2Fbadge%3Ftype%3Dswift-versions)](https://swiftpackageindex.com/velocityzen/fp-swift-bracket)
 [![Platforms](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Fvelocityzen%2Ffp-swift-bracket%2Fbadge%3Ftype%3Dplatforms)](https://swiftpackageindex.com/velocityzen/fp-swift-bracket)
 
-A monadic acquire / use / release pattern for Swift's `Result` and async `Result` workflows. A Swift port of [fp-ts-bracket](https://github.com/velocityzen/fp-ts-bracket) built on top of [fp-swift](https://github.com/velocityzen/fp-swift).
+A monadic acquire / use / release pattern for Swift's `Result` and async `Result` workflows.
 
 ## Installation
 
