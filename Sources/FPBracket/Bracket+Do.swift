@@ -1,0 +1,193 @@
+import FP
+
+// MARK: - Do Notation
+
+/// Starting point for Bracket's do-notation chain.
+///
+/// Provides `bind` and `let` to begin a monadic computation that accumulates
+/// values into a growing tuple, short-circuiting on the first failure.
+///
+/// ```swift
+/// let pipeline = BracketDo<MyError>()
+///     .bind { withFile }                       // Bracket<MyError, File>
+///     .bind { file in withDB(file) }           // Bracket<MyError, (File, DB)>
+///     .let { _, db in derivedKey(db) }         // Bracket<MyError, (File, DB, Key)>
+///     .map { file, _, key in (file, key) }     // Bracket<MyError, (File, Key)>
+/// ```
+public struct BracketDo<E: Error> {
+    public init() {}
+
+    /// Binds the first Bracket in the chain.
+    public func bind<A>(_ fn: () -> Bracket<E, A>) -> Bracket<E, A> {
+        fn()
+    }
+
+    /// Adds a pure value as the first element in the chain.
+    public func `let`<A>(_ fn: () -> A) -> Bracket<E, A> {
+        .of(fn())
+    }
+}
+
+// MARK: - bind / let (1 → 2)
+
+public extension Bracket {
+    @_disfavoredOverload
+    func bind<B>(
+        _ fn: @escaping (R) -> Bracket<E, B>
+    ) -> Bracket<E, (R, B)> {
+        flatMap { a in fn(a).map { b in (a, b) } }
+    }
+
+    @_disfavoredOverload
+    func `let`<B>(
+        _ fn: @escaping (R) -> B
+    ) -> Bracket<E, (R, B)> {
+        map { a in (a, fn(a)) }
+    }
+}
+
+// MARK: - bind / let (2 → 3)
+
+public extension Bracket {
+    func bind<A, B, C>(
+        _ fn: @escaping (A, B) -> Bracket<E, C>
+    ) -> Bracket<E, (A, B, C)> where R == (A, B) {
+        flatMap { (a, b) in fn(a, b).map { c in (a, b, c) } }
+    }
+
+    func `let`<A, B, C>(
+        _ fn: @escaping (A, B) -> C
+    ) -> Bracket<E, (A, B, C)> where R == (A, B) {
+        map { (a, b) in (a, b, fn(a, b)) }
+    }
+}
+
+// MARK: - bind / let (3 → 4)
+
+public extension Bracket {
+    func bind<A, B, C, D>(
+        _ fn: @escaping (A, B, C) -> Bracket<E, D>
+    ) -> Bracket<E, (A, B, C, D)> where R == (A, B, C) {
+        flatMap { (a, b, c) in fn(a, b, c).map { d in (a, b, c, d) } }
+    }
+
+    func `let`<A, B, C, D>(
+        _ fn: @escaping (A, B, C) -> D
+    ) -> Bracket<E, (A, B, C, D)> where R == (A, B, C) {
+        map { (a, b, c) in (a, b, c, fn(a, b, c)) }
+    }
+}
+
+// MARK: - bind / let (4 → 5)
+
+public extension Bracket {
+    func bind<A, B, C, D, F>(
+        _ fn: @escaping (A, B, C, D) -> Bracket<E, F>
+    ) -> Bracket<E, (A, B, C, D, F)> where R == (A, B, C, D) {
+        flatMap { (a, b, c, d) in fn(a, b, c, d).map { f in (a, b, c, d, f) } }
+    }
+
+    func `let`<A, B, C, D, F>(
+        _ fn: @escaping (A, B, C, D) -> F
+    ) -> Bracket<E, (A, B, C, D, F)> where R == (A, B, C, D) {
+        map { (a, b, c, d) in (a, b, c, d, fn(a, b, c, d)) }
+    }
+}
+
+// MARK: - bind / let (5 → 6)
+
+public extension Bracket {
+    func bind<A, B, C, D, F, G>(
+        _ fn: @escaping (A, B, C, D, F) -> Bracket<E, G>
+    ) -> Bracket<E, (A, B, C, D, F, G)> where R == (A, B, C, D, F) {
+        flatMap { (a, b, c, d, f) in fn(a, b, c, d, f).map { g in (a, b, c, d, f, g) } }
+    }
+
+    func `let`<A, B, C, D, F, G>(
+        _ fn: @escaping (A, B, C, D, F) -> G
+    ) -> Bracket<E, (A, B, C, D, F, G)> where R == (A, B, C, D, F) {
+        map { (a, b, c, d, f) in (a, b, c, d, f, fn(a, b, c, d, f)) }
+    }
+}
+
+// MARK: - bind / let (6 → 7)
+
+public extension Bracket {
+    func bind<A, B, C, D, F, G, H>(
+        _ fn: @escaping (A, B, C, D, F, G) -> Bracket<E, H>
+    ) -> Bracket<E, (A, B, C, D, F, G, H)> where R == (A, B, C, D, F, G) {
+        flatMap { (a, b, c, d, f, g) in
+            fn(a, b, c, d, f, g).map { h in (a, b, c, d, f, g, h) }
+        }
+    }
+
+    func `let`<A, B, C, D, F, G, H>(
+        _ fn: @escaping (A, B, C, D, F, G) -> H
+    ) -> Bracket<E, (A, B, C, D, F, G, H)> where R == (A, B, C, D, F, G) {
+        map { (a, b, c, d, f, g) in (a, b, c, d, f, g, fn(a, b, c, d, f, g)) }
+    }
+}
+
+// MARK: - bind / let (7 → 8)
+
+public extension Bracket {
+    func bind<A, B, C, D, F, G, H, I>(
+        _ fn: @escaping (A, B, C, D, F, G, H) -> Bracket<E, I>
+    ) -> Bracket<E, (A, B, C, D, F, G, H, I)> where R == (A, B, C, D, F, G, H) {
+        flatMap { (a, b, c, d, f, g, h) in
+            fn(a, b, c, d, f, g, h).map { i in (a, b, c, d, f, g, h, i) }
+        }
+    }
+
+    func `let`<A, B, C, D, F, G, H, I>(
+        _ fn: @escaping (A, B, C, D, F, G, H) -> I
+    ) -> Bracket<E, (A, B, C, D, F, G, H, I)> where R == (A, B, C, D, F, G, H) {
+        map { (a, b, c, d, f, g, h) in
+            (a, b, c, d, f, g, h, fn(a, b, c, d, f, g, h))
+        }
+    }
+}
+
+// MARK: - bind / let (8 → 9)
+
+public extension Bracket {
+    func bind<A, B, C, D, F, G, H, I, J>(
+        _ fn: @escaping (A, B, C, D, F, G, H, I) -> Bracket<E, J>
+    ) -> Bracket<E, (A, B, C, D, F, G, H, I, J)>
+    where R == (A, B, C, D, F, G, H, I) {
+        flatMap { (a, b, c, d, f, g, h, i) in
+            fn(a, b, c, d, f, g, h, i).map { j in (a, b, c, d, f, g, h, i, j) }
+        }
+    }
+
+    func `let`<A, B, C, D, F, G, H, I, J>(
+        _ fn: @escaping (A, B, C, D, F, G, H, I) -> J
+    ) -> Bracket<E, (A, B, C, D, F, G, H, I, J)>
+    where R == (A, B, C, D, F, G, H, I) {
+        map { (a, b, c, d, f, g, h, i) in
+            (a, b, c, d, f, g, h, i, fn(a, b, c, d, f, g, h, i))
+        }
+    }
+}
+
+// MARK: - bind / let (9 → 10)
+
+public extension Bracket {
+    func bind<A, B, C, D, F, G, H, I, J, K>(
+        _ fn: @escaping (A, B, C, D, F, G, H, I, J) -> Bracket<E, K>
+    ) -> Bracket<E, (A, B, C, D, F, G, H, I, J, K)>
+    where R == (A, B, C, D, F, G, H, I, J) {
+        flatMap { (a, b, c, d, f, g, h, i, j) in
+            fn(a, b, c, d, f, g, h, i, j).map { k in (a, b, c, d, f, g, h, i, j, k) }
+        }
+    }
+
+    func `let`<A, B, C, D, F, G, H, I, J, K>(
+        _ fn: @escaping (A, B, C, D, F, G, H, I, J) -> K
+    ) -> Bracket<E, (A, B, C, D, F, G, H, I, J, K)>
+    where R == (A, B, C, D, F, G, H, I, J) {
+        map { (a, b, c, d, f, g, h, i, j) in
+            (a, b, c, d, f, g, h, i, j, fn(a, b, c, d, f, g, h, i, j))
+        }
+    }
+}
