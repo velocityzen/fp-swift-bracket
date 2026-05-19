@@ -15,8 +15,12 @@ private func makeAsyncBracket<R>(
     resource: R
 ) -> BracketAsync<TestError, R> {
     BracketAsync(
-        acquire: { await log.record("acquire(\(tag))"); return .success(resource) },
-        dispose: { _ in await log.record("dispose(\(tag))"); return .success(()) }
+        acquire: {
+            await log.record("acquire(\(tag))"); return .success(resource)
+        },
+        dispose: { _ in
+            await log.record("dispose(\(tag))"); return .success(())
+        }
     )
 }
 
@@ -37,10 +41,12 @@ struct BracketAsyncDoTests {
         }
 
         #expect(result == .success("a=1 b=two c=3.14"))
-        #expect(await log.snapshot() == [
-            "acquire(a)", "acquire(b)",
-            "dispose(b)", "dispose(a)",
-        ])
+        #expect(
+            await log.snapshot() == [
+                "acquire(a)", "acquire(b)",
+                "dispose(b)", "dispose(a)",
+            ]
+        )
     }
 
     @Test("bind short-circuits when a step's acquire fails")
@@ -50,7 +56,9 @@ struct BracketAsyncDoTests {
             .bind { makeAsyncBracket("a", log: log, resource: 1) }
             .bind { _ -> BracketAsync<TestError, Int> in
                 BracketAsync(
-                    acquire: { await log.record("acquire(b)"); return .failure(.fail) },
+                    acquire: {
+                        await log.record("acquire(b)"); return .failure(.fail)
+                    },
                     dispose: { _ in .success(()) }
                 )
             }

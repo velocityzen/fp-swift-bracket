@@ -20,8 +20,12 @@ private func makeBracket(
     resource: Int
 ) -> Bracket<TestError, Int> {
     Bracket(
-        acquire: { log.record("acquire(\(tag))"); return .success(resource) },
-        dispose: { _ in log.record("dispose(\(tag))"); return .success(()) }
+        acquire: {
+            log.record("acquire(\(tag))"); return .success(resource)
+        },
+        dispose: { _ in
+            log.record("dispose(\(tag))"); return .success(())
+        }
     )
 }
 
@@ -31,8 +35,12 @@ private func makeAsyncBracket(
     resource: Int
 ) -> BracketAsync<TestError, Int> {
     BracketAsync(
-        acquire: { await log.record("acquire(\(tag))"); return .success(resource) },
-        dispose: { _ in await log.record("dispose(\(tag))"); return .success(()) }
+        acquire: {
+            await log.record("acquire(\(tag))"); return .success(resource)
+        },
+        dispose: { _ in
+            await log.record("dispose(\(tag))"); return .success(())
+        }
     )
 }
 
@@ -56,11 +64,13 @@ struct ArrayBracketTests {
         }
 
         #expect(result == .success(6))
-        #expect(log.events == [
-            "acquire(a)", "acquire(b)", "acquire(c)",
-            "use([1, 2, 3])",
-            "dispose(c)", "dispose(b)", "dispose(a)",
-        ])
+        #expect(
+            log.events == [
+                "acquire(a)", "acquire(b)", "acquire(c)",
+                "use([1, 2, 3])",
+                "dispose(c)", "dispose(b)", "dispose(a)",
+            ]
+        )
     }
 
     @Test("sequence: previously acquired are released when a later acquire fails")
@@ -73,7 +83,9 @@ struct ArrayBracketTests {
                     log.record("acquire(b)")
                     return .failure(.acquireFailed)
                 },
-                dispose: { _ in log.record("dispose(b)"); return .success(()) }
+                dispose: { _ in
+                    log.record("dispose(b)"); return .success(())
+                }
             ),
             makeBracket("c", log: log, resource: 3),
         ]
@@ -82,11 +94,13 @@ struct ArrayBracketTests {
         let result = combined { _ in Result<Int, TestError>.success(0) }
 
         #expect(result == .failure(.acquireFailed))
-        #expect(log.events == [
-            "acquire(a)",
-            "acquire(b)",
-            "dispose(a)",
-        ])
+        #expect(
+            log.events == [
+                "acquire(a)",
+                "acquire(b)",
+                "dispose(a)",
+            ]
+        )
     }
 
     @Test("sequence on empty array yields an empty resource list")
@@ -135,7 +149,8 @@ struct ArrayBracketTests {
         let viaTraverse: Bracket<TestError, [Int]> = ids.traverse { id in
             makeBracket("t\(id)", log: log1, resource: id)
         }
-        let viaMapSequence = ids
+        let viaMapSequence =
+            ids
             .map { id in makeBracket("t\(id)", log: log2, resource: id) }
             .sequence()
 
@@ -163,11 +178,13 @@ struct ArrayBracketTests {
         }
 
         #expect(result == .success(6))
-        #expect(await log.snapshot() == [
-            "acquire(a)", "acquire(b)", "acquire(c)",
-            "use([1, 2, 3])",
-            "dispose(c)", "dispose(b)", "dispose(a)",
-        ])
+        #expect(
+            await log.snapshot() == [
+                "acquire(a)", "acquire(b)", "acquire(c)",
+                "use([1, 2, 3])",
+                "dispose(c)", "dispose(b)", "dispose(a)",
+            ]
+        )
     }
 
     @Test("async traverse maps elements to brackets and sequences them")

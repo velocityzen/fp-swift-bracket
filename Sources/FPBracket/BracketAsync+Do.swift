@@ -44,13 +44,13 @@ public extension BracketAsync {
     func bind<A, B, C>(
         _ fn: @escaping (A, B) -> BracketAsync<E, C>
     ) -> BracketAsync<E, (A, B, C)> where R == (A, B) {
-        flatMap { (a, b) in fn(a, b).map { c in (a, b, c) } }
+        flatMap { a, b in fn(a, b).map { c in (a, b, c) } }
     }
 
     func `let`<A, B, C>(
         _ fn: @escaping (A, B) -> C
     ) -> BracketAsync<E, (A, B, C)> where R == (A, B) {
-        map { (a, b) in (a, b, fn(a, b)) }
+        map { a, b in (a, b, fn(a, b)) }
     }
 }
 
@@ -60,13 +60,13 @@ public extension BracketAsync {
     func bind<A, B, C, D>(
         _ fn: @escaping (A, B, C) -> BracketAsync<E, D>
     ) -> BracketAsync<E, (A, B, C, D)> where R == (A, B, C) {
-        flatMap { (a, b, c) in fn(a, b, c).map { d in (a, b, c, d) } }
+        flatMap { a, b, c in fn(a, b, c).map { d in (a, b, c, d) } }
     }
 
     func `let`<A, B, C, D>(
         _ fn: @escaping (A, B, C) -> D
     ) -> BracketAsync<E, (A, B, C, D)> where R == (A, B, C) {
-        map { (a, b, c) in (a, b, c, fn(a, b, c)) }
+        map { a, b, c in (a, b, c, fn(a, b, c)) }
     }
 }
 
@@ -76,13 +76,13 @@ public extension BracketAsync {
     func bind<A, B, C, D, F>(
         _ fn: @escaping (A, B, C, D) -> BracketAsync<E, F>
     ) -> BracketAsync<E, (A, B, C, D, F)> where R == (A, B, C, D) {
-        flatMap { (a, b, c, d) in fn(a, b, c, d).map { f in (a, b, c, d, f) } }
+        flatMap { a, b, c, d in fn(a, b, c, d).map { f in (a, b, c, d, f) } }
     }
 
     func `let`<A, B, C, D, F>(
         _ fn: @escaping (A, B, C, D) -> F
     ) -> BracketAsync<E, (A, B, C, D, F)> where R == (A, B, C, D) {
-        map { (a, b, c, d) in (a, b, c, d, fn(a, b, c, d)) }
+        map { a, b, c, d in (a, b, c, d, fn(a, b, c, d)) }
     }
 }
 
@@ -92,13 +92,13 @@ public extension BracketAsync {
     func bind<A, B, C, D, F, G>(
         _ fn: @escaping (A, B, C, D, F) -> BracketAsync<E, G>
     ) -> BracketAsync<E, (A, B, C, D, F, G)> where R == (A, B, C, D, F) {
-        flatMap { (a, b, c, d, f) in fn(a, b, c, d, f).map { g in (a, b, c, d, f, g) } }
+        flatMap { a, b, c, d, f in fn(a, b, c, d, f).map { g in (a, b, c, d, f, g) } }
     }
 
     func `let`<A, B, C, D, F, G>(
         _ fn: @escaping (A, B, C, D, F) -> G
     ) -> BracketAsync<E, (A, B, C, D, F, G)> where R == (A, B, C, D, F) {
-        map { (a, b, c, d, f) in (a, b, c, d, f, fn(a, b, c, d, f)) }
+        map { a, b, c, d, f in (a, b, c, d, f, fn(a, b, c, d, f)) }
     }
 }
 
@@ -108,7 +108,7 @@ public extension BracketAsync {
     func bind<A, B, C, D, F, G, H>(
         _ fn: @escaping (A, B, C, D, F, G) -> BracketAsync<E, H>
     ) -> BracketAsync<E, (A, B, C, D, F, G, H)> where R == (A, B, C, D, F, G) {
-        flatMap { (a, b, c, d, f, g) in
+        flatMap { a, b, c, d, f, g in
             fn(a, b, c, d, f, g).map { h in (a, b, c, d, f, g, h) }
         }
     }
@@ -116,7 +116,7 @@ public extension BracketAsync {
     func `let`<A, B, C, D, F, G, H>(
         _ fn: @escaping (A, B, C, D, F, G) -> H
     ) -> BracketAsync<E, (A, B, C, D, F, G, H)> where R == (A, B, C, D, F, G) {
-        map { (a, b, c, d, f, g) in (a, b, c, d, f, g, fn(a, b, c, d, f, g)) }
+        map { a, b, c, d, f, g in (a, b, c, d, f, g, fn(a, b, c, d, f, g)) }
     }
 }
 
@@ -127,7 +127,7 @@ public extension BracketAsync {
         _ fn: @escaping (A, B, C, D, F, G, H) -> BracketAsync<E, I>
     ) -> BracketAsync<E, (A, B, C, D, F, G, H, I)>
     where R == (A, B, C, D, F, G, H) {
-        flatMap { (a, b, c, d, f, g, h) in
+        flatMap { a, b, c, d, f, g, h in
             fn(a, b, c, d, f, g, h).map { i in (a, b, c, d, f, g, h, i) }
         }
     }
@@ -136,7 +136,7 @@ public extension BracketAsync {
         _ fn: @escaping (A, B, C, D, F, G, H) -> I
     ) -> BracketAsync<E, (A, B, C, D, F, G, H, I)>
     where R == (A, B, C, D, F, G, H) {
-        map { (a, b, c, d, f, g, h) in
+        map { a, b, c, d, f, g, h in
             (a, b, c, d, f, g, h, fn(a, b, c, d, f, g, h))
         }
     }
@@ -149,7 +149,7 @@ public extension BracketAsync {
         _ fn: @escaping (A, B, C, D, F, G, H, I) -> BracketAsync<E, J>
     ) -> BracketAsync<E, (A, B, C, D, F, G, H, I, J)>
     where R == (A, B, C, D, F, G, H, I) {
-        flatMap { (a, b, c, d, f, g, h, i) in
+        flatMap { a, b, c, d, f, g, h, i in
             fn(a, b, c, d, f, g, h, i).map { j in (a, b, c, d, f, g, h, i, j) }
         }
     }
@@ -158,7 +158,7 @@ public extension BracketAsync {
         _ fn: @escaping (A, B, C, D, F, G, H, I) -> J
     ) -> BracketAsync<E, (A, B, C, D, F, G, H, I, J)>
     where R == (A, B, C, D, F, G, H, I) {
-        map { (a, b, c, d, f, g, h, i) in
+        map { a, b, c, d, f, g, h, i in
             (a, b, c, d, f, g, h, i, fn(a, b, c, d, f, g, h, i))
         }
     }
@@ -171,7 +171,7 @@ public extension BracketAsync {
         _ fn: @escaping (A, B, C, D, F, G, H, I, J) -> BracketAsync<E, K>
     ) -> BracketAsync<E, (A, B, C, D, F, G, H, I, J, K)>
     where R == (A, B, C, D, F, G, H, I, J) {
-        flatMap { (a, b, c, d, f, g, h, i, j) in
+        flatMap { a, b, c, d, f, g, h, i, j in
             fn(a, b, c, d, f, g, h, i, j).map { k in (a, b, c, d, f, g, h, i, j, k) }
         }
     }
@@ -180,7 +180,7 @@ public extension BracketAsync {
         _ fn: @escaping (A, B, C, D, F, G, H, I, J) -> K
     ) -> BracketAsync<E, (A, B, C, D, F, G, H, I, J, K)>
     where R == (A, B, C, D, F, G, H, I, J) {
-        map { (a, b, c, d, f, g, h, i, j) in
+        map { a, b, c, d, f, g, h, i, j in
             (a, b, c, d, f, g, h, i, j, fn(a, b, c, d, f, g, h, i, j))
         }
     }

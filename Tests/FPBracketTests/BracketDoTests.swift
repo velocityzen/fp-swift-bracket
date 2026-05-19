@@ -14,8 +14,12 @@ private func makeBracket<R>(
     resource: R
 ) -> Bracket<TestError, R> {
     Bracket(
-        acquire: { log.record("acquire(\(tag))"); return .success(resource) },
-        dispose: { _ in log.record("dispose(\(tag))"); return .success(()) }
+        acquire: {
+            log.record("acquire(\(tag))"); return .success(resource)
+        },
+        dispose: { _ in
+            log.record("dispose(\(tag))"); return .success(())
+        }
     )
 }
 
@@ -36,10 +40,12 @@ struct BracketDoTests {
         }
 
         #expect(result == .success("a=1 b=two c=3.14"))
-        #expect(log.events == [
-            "acquire(a)", "acquire(b)",
-            "dispose(b)", "dispose(a)",
-        ])
+        #expect(
+            log.events == [
+                "acquire(a)", "acquire(b)",
+                "dispose(b)", "dispose(a)",
+            ]
+        )
     }
 
     @Test("let on empty Do chain seeds a pure value")
@@ -56,7 +62,9 @@ struct BracketDoTests {
             .bind { makeBracket("a", log: log, resource: 1) }
             .bind { _ -> Bracket<TestError, Int> in
                 Bracket(
-                    acquire: { log.record("acquire(b)"); return .failure(.fail) },
+                    acquire: {
+                        log.record("acquire(b)"); return .failure(.fail)
+                    },
                     dispose: { _ in .success(()) }
                 )
             }

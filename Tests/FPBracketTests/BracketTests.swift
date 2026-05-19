@@ -19,8 +19,12 @@ private func makeBracket(
     resource: Int
 ) -> Bracket<TestError, Int> {
     Bracket(
-        acquire: { log.record("acquire(\(tag))"); return .success(resource) },
-        dispose: { r in log.record("dispose(\(tag), \(r))"); return .success(()) }
+        acquire: {
+            log.record("acquire(\(tag))"); return .success(resource)
+        },
+        dispose: { r in
+            log.record("dispose(\(tag), \(r))"); return .success(())
+        }
     )
 }
 
@@ -46,8 +50,12 @@ struct BracketTests {
     func acquireFails() {
         let log = CallLog()
         let bracket = Bracket<TestError, Int>(
-            acquire: { log.record("acquire"); return .failure(.acquireFailed) },
-            dispose: { _ in log.record("dispose"); return .success(()) }
+            acquire: {
+                log.record("acquire"); return .failure(.acquireFailed)
+            },
+            dispose: { _ in
+                log.record("dispose"); return .success(())
+            }
         )
 
         let result = bracket { (_: Int) -> Result<Int, TestError> in
@@ -106,10 +114,12 @@ struct BracketTests {
 
         #expect(r1 == .success(20))
         #expect(r2 == .success("v=10"))
-        #expect(log.events == [
-            "acquire(a)", "dispose(a, 10)",
-            "acquire(a)", "dispose(a, 10)",
-        ])
+        #expect(
+            log.events == [
+                "acquire(a)", "dispose(a, 10)",
+                "acquire(a)", "dispose(a, 10)",
+            ]
+        )
     }
 
     // MARK: - of
@@ -159,13 +169,15 @@ struct BracketTests {
         }
 
         #expect(result == .success(2))
-        #expect(log.events == [
-            "acquire(outer)",
-            "acquire(inner)",
-            "use(2)",
-            "dispose(inner, 2)",
-            "dispose(outer, 1)",
-        ])
+        #expect(
+            log.events == [
+                "acquire(outer)",
+                "acquire(inner)",
+                "use(2)",
+                "dispose(inner, 2)",
+                "dispose(outer, 1)",
+            ]
+        )
     }
 
     @Test("flatMap releases outer when inner acquire fails")
@@ -177,18 +189,22 @@ struct BracketTests {
                 log.record("acquire(inner)")
                 return .failure(.innerAcquireFailed)
             },
-            dispose: { r in log.record("dispose(inner, \(r))"); return .success(()) }
+            dispose: { r in
+                log.record("dispose(inner, \(r))"); return .success(())
+            }
         )
 
         let composed = outer.flatMap { _ in failingInner }
         let result = composed { _ in Result<Int, TestError>.success(0) }
 
         #expect(result == .failure(.innerAcquireFailed))
-        #expect(log.events == [
-            "acquire(outer)",
-            "acquire(inner)",
-            "dispose(outer, 1)",
-        ])
+        #expect(
+            log.events == [
+                "acquire(outer)",
+                "acquire(inner)",
+                "dispose(outer, 1)",
+            ]
+        )
     }
 
     // MARK: - Monad laws

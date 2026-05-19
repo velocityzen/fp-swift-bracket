@@ -21,12 +21,20 @@ struct BracketTapTests {
     func tapKeepsOuterResource() {
         let log = CallLog()
         let outer = Bracket<TestError, Int>(
-            acquire: { log.record("acquire(outer)"); return .success(1) },
-            dispose: { _ in log.record("dispose(outer)"); return .success(()) }
+            acquire: {
+                log.record("acquire(outer)"); return .success(1)
+            },
+            dispose: { _ in
+                log.record("dispose(outer)"); return .success(())
+            }
         )
         let side = Bracket<TestError, String>(
-            acquire: { log.record("acquire(side)"); return .success("X") },
-            dispose: { _ in log.record("dispose(side)"); return .success(()) }
+            acquire: {
+                log.record("acquire(side)"); return .success("X")
+            },
+            dispose: { _ in
+                log.record("dispose(side)"); return .success(())
+            }
         )
 
         let composed = outer.tap { _ in side }
@@ -36,13 +44,15 @@ struct BracketTapTests {
         }
 
         #expect(result == .success(10))
-        #expect(log.events == [
-            "acquire(outer)",
-            "acquire(side)",
-            "use(1)",
-            "dispose(side)",
-            "dispose(outer)",
-        ])
+        #expect(
+            log.events == [
+                "acquire(outer)",
+                "acquire(side)",
+                "use(1)",
+                "dispose(side)",
+                "dispose(outer)",
+            ]
+        )
     }
 
     @Test("tap propagates side-effect failure")
@@ -62,12 +72,20 @@ struct BracketTapTests {
     func asyncTap() async {
         let log = AsyncLog()
         let outer = BracketAsync<TestError, Int>(
-            acquire: { await log.record("acquire(outer)"); return .success(1) },
-            dispose: { _ in await log.record("dispose(outer)"); return .success(()) }
+            acquire: {
+                await log.record("acquire(outer)"); return .success(1)
+            },
+            dispose: { _ in
+                await log.record("dispose(outer)"); return .success(())
+            }
         )
         let side = BracketAsync<TestError, String>(
-            acquire: { await log.record("acquire(side)"); return .success("X") },
-            dispose: { _ in await log.record("dispose(side)"); return .success(()) }
+            acquire: {
+                await log.record("acquire(side)"); return .success("X")
+            },
+            dispose: { _ in
+                await log.record("dispose(side)"); return .success(())
+            }
         )
 
         let composed = outer.tap { _ in side }
@@ -77,12 +95,14 @@ struct BracketTapTests {
         }
 
         #expect(result == .success(10))
-        #expect(await log.snapshot() == [
-            "acquire(outer)",
-            "acquire(side)",
-            "use(1)",
-            "dispose(side)",
-            "dispose(outer)",
-        ])
+        #expect(
+            await log.snapshot() == [
+                "acquire(outer)",
+                "acquire(side)",
+                "use(1)",
+                "dispose(side)",
+                "dispose(outer)",
+            ]
+        )
     }
 }
