@@ -20,7 +20,7 @@ struct BracketTapTests {
     @Test("tap acquires the side-effect bracket, keeps the outer resource")
     func tapKeepsOuterResource() {
         let log = CallLog()
-        let outer = Bracket<TestError, Int>(
+        let outer = Bracket<Int, TestError>(
             acquire: {
                 log.record("acquire(outer)"); return .success(1)
             },
@@ -28,7 +28,7 @@ struct BracketTapTests {
                 log.record("dispose(outer)"); return .success(())
             }
         )
-        let side = Bracket<TestError, String>(
+        let side = Bracket<String, TestError>(
             acquire: {
                 log.record("acquire(side)"); return .success("X")
             },
@@ -57,8 +57,8 @@ struct BracketTapTests {
 
     @Test("tap propagates side-effect failure")
     func tapPropagatesFailure() {
-        let outer = Bracket<TestError, Int>.of(1)
-        let failingSide = Bracket<TestError, Int>(
+        let outer = Bracket<Int, TestError>.of(1)
+        let failingSide = Bracket<Int, TestError>(
             acquire: { .failure(.fail) },
             dispose: { _ in .success(()) }
         )
@@ -71,7 +71,7 @@ struct BracketTapTests {
     @Test("async tap acquires the side-effect bracket, keeps the outer resource")
     func asyncTap() async {
         let log = AsyncLog()
-        let outer = BracketAsync<TestError, Int>(
+        let outer = BracketAsync<Int, TestError>(
             acquire: {
                 await log.record("acquire(outer)"); return .success(1)
             },
@@ -79,7 +79,7 @@ struct BracketTapTests {
                 await log.record("dispose(outer)"); return .success(())
             }
         )
-        let side = BracketAsync<TestError, String>(
+        let side = BracketAsync<String, TestError>(
             acquire: {
                 await log.record("acquire(side)"); return .success("X")
             },

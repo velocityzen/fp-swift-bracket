@@ -18,7 +18,7 @@ private func makeBracket(
     _ tag: String,
     log: CallLog,
     resource: Int
-) -> BracketAsync<TestError, Int> {
+) -> BracketAsync<Int, TestError> {
     BracketAsync(
         acquire: {
             await log.record("acquire(\(tag))")
@@ -52,7 +52,7 @@ struct BracketAsyncTests {
     @Test("acquire failure short-circuits and skips dispose")
     func acquireFails() async {
         let log = CallLog()
-        let bracket = BracketAsync<TestError, Int>(
+        let bracket = BracketAsync<Int, TestError>(
             acquire: {
                 await log.record("acquire")
                 return .failure(.acquireFailed)
@@ -86,7 +86,7 @@ struct BracketAsyncTests {
 
     @Test("dispose failure wins over body success")
     func disposeOverridesUseSuccess() async {
-        let bracket = BracketAsync<TestError, Int>(
+        let bracket = BracketAsync<Int, TestError>(
             acquire: { .success(1) },
             dispose: { _ in .failure(.disposeFailed) }
         )
@@ -119,7 +119,7 @@ struct BracketAsyncTests {
     @Test("of yields the pure value with no acquire/dispose effect")
     func ofPure() async {
         let log = CallLog()
-        let bracket = BracketAsync<TestError, Int>.of(42)
+        let bracket = BracketAsync<Int, TestError>.of(42)
         let result = await bracket { r in
             await log.record("use(\(r))")
             return Result<Int, TestError>.success(r)
@@ -176,7 +176,7 @@ struct BracketAsyncTests {
     func flatMapReleasesOuterOnInnerAcquireFailure() async {
         let log = CallLog()
         let outer = makeBracket("outer", log: log, resource: 1)
-        let failingInner = BracketAsync<TestError, Int>(
+        let failingInner = BracketAsync<Int, TestError>(
             acquire: {
                 await log.record("acquire(inner)")
                 return .failure(.innerAcquireFailed)
@@ -204,8 +204,8 @@ struct BracketAsyncTests {
 
     @Test("left identity: of(a).flatMap(f) == f(a)")
     func leftIdentity() async {
-        let f: (Int) -> BracketAsync<TestError, String> = { n in .of("v=\(n)") }
-        let lhsBracket = BracketAsync<TestError, Int>.of(7).flatMap(f)
+        let f: (Int) -> BracketAsync<String, TestError> = { n in .of("v=\(n)") }
+        let lhsBracket = BracketAsync<Int, TestError>.of(7).flatMap(f)
         let lhs = await lhsBracket { v in Result<String, TestError>.success(v) }
 
         let rhsBracket = f(7)
@@ -218,7 +218,7 @@ struct BracketAsyncTests {
         let logA = CallLog()
         let logB = CallLog()
         let mA = makeBracket("a", log: logA, resource: 3)
-            .flatMap(BracketAsync<TestError, Int>.of)
+            .flatMap(BracketAsync<Int, TestError>.of)
         let mB = makeBracket("a", log: logB, resource: 3)
 
         let lhs = await mA { r in Result<Int, TestError>.success(r) }

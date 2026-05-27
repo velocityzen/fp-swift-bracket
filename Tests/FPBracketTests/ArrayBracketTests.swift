@@ -18,7 +18,7 @@ private func makeBracket(
     _ tag: String,
     log: CallLog,
     resource: Int
-) -> Bracket<TestError, Int> {
+) -> Bracket<Int, TestError> {
     Bracket(
         acquire: {
             log.record("acquire(\(tag))"); return .success(resource)
@@ -33,7 +33,7 @@ private func makeAsyncBracket(
     _ tag: String,
     log: AsyncLog,
     resource: Int
-) -> BracketAsync<TestError, Int> {
+) -> BracketAsync<Int, TestError> {
     BracketAsync(
         acquire: {
             await log.record("acquire(\(tag))"); return .success(resource)
@@ -76,7 +76,7 @@ struct ArrayBracketTests {
     @Test("sequence: previously acquired are released when a later acquire fails")
     func sequenceReleasesOnAcquireFailure() {
         let log = CallLog()
-        let brackets: [Bracket<TestError, Int>] = [
+        let brackets: [Bracket<Int, TestError>] = [
             makeBracket("a", log: log, resource: 1),
             Bracket(
                 acquire: {
@@ -105,7 +105,7 @@ struct ArrayBracketTests {
 
     @Test("sequence on empty array yields an empty resource list")
     func sequenceEmpty() {
-        let empty: [Bracket<TestError, Int>] = []
+        let empty: [Bracket<Int, TestError>] = []
         let combined = empty.sequence()
         let result = combined { resources in
             Result<Int, TestError>.success(resources.count)
@@ -120,7 +120,7 @@ struct ArrayBracketTests {
         let log = CallLog()
         let ids = [10, 20, 30]
 
-        let combined: Bracket<TestError, [Int]> = ids.traverse { id in
+        let combined: Bracket<[Int], TestError> = ids.traverse { id in
             makeBracket("id\(id)", log: log, resource: id)
         }
         let result = combined { resources in
@@ -146,7 +146,7 @@ struct ArrayBracketTests {
         let log2 = CallLog()
         let ids = [1, 2, 3]
 
-        let viaTraverse: Bracket<TestError, [Int]> = ids.traverse { id in
+        let viaTraverse: Bracket<[Int], TestError> = ids.traverse { id in
             makeBracket("t\(id)", log: log1, resource: id)
         }
         let viaMapSequence =
@@ -192,7 +192,7 @@ struct ArrayBracketTests {
         let log = AsyncLog()
         let ids = [10, 20, 30]
 
-        let combined: BracketAsync<TestError, [Int]> = ids.traverse { id in
+        let combined: BracketAsync<[Int], TestError> = ids.traverse { id in
             makeAsyncBracket("id\(id)", log: log, resource: id)
         }
         let result = await combined { resources in

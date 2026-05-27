@@ -4,12 +4,12 @@ import FP
 ///
 /// Module-internal — extensions in other files (e.g. `Bracket+Sequence.swift`)
 /// build `Bracket` values directly via ``Bracket/init(acquireResource:)``.
-struct Resource<E: Error, R> {
+struct Resource<R, E: Error> {
     let value: R
     let release: () -> Result<Void, E>
 }
 
-/// `Bracket<E, R>` packages an acquire/dispose pair into a reusable, monadic
+/// `Bracket<R, E>` packages an acquire/dispose pair into a reusable, monadic
 /// value that scopes work over a resource `R`.
 ///
 /// Define `acquire` and `dispose` once, then call the bracket as a function
@@ -17,7 +17,7 @@ struct Resource<E: Error, R> {
 /// callback, and releases.
 ///
 /// ```swift
-/// let withFile: Bracket<MyError, File> = Bracket(
+/// let withFile: Bracket<File, MyError> = Bracket(
 ///     acquire: { openFile(path) },
 ///     dispose: { file in closeFile(file) }
 /// )
@@ -40,12 +40,12 @@ struct Resource<E: Error, R> {
 ///   underlying acquire/dispose.
 /// - ``flatMap(_:)`` nests a second Bracket inside the first. Acquire order is
 ///   outer-then-inner; release order is inner-then-outer.
-public struct Bracket<E: Error, R> {
+public struct Bracket<R, E: Error> {
     // Module-internal: extensions reach in to build new Brackets from a raw
     // scope thunk (see `Bracket+Sequence.swift`). Not part of the public API.
-    let acquireResource: () -> Result<Resource<E, R>, E>
+    let acquireResource: () -> Result<Resource<R, E>, E>
 
-    init(acquireResource: @escaping () -> Result<Resource<E, R>, E>) {
+    init(acquireResource: @escaping () -> Result<Resource<R, E>, E>) {
         self.acquireResource = acquireResource
     }
 
@@ -62,7 +62,7 @@ public struct Bracket<E: Error, R> {
     }
 
     /// A pure Bracket that yields `value` with a no-op acquire/dispose.
-    public static func of(_ value: R) -> Bracket<E, R> {
+    public static func of(_ value: R) -> Bracket<R, E> {
         Bracket(acquireResource: {
             .success(Resource(value: value, release: { .success(()) }))
         })
@@ -82,9 +82,9 @@ public struct Bracket<E: Error, R> {
     }
 
     /// Transforms the resource view without changing the underlying acquire/dispose.
-    public func map<S>(_ transform: @escaping (R) -> S) -> Bracket<E, S> {
+    public func map<S>(_ transform: @escaping (R) -> S) -> Bracket<S, E> {
         let acquire = acquireResource
-        return Bracket<E, S>(acquireResource: {
+        return Bracket<S, E>(acquireResource: {
             acquire().map { outer in
                 Resource(value: transform(outer.value), release: outer.release)
             }
@@ -96,9 +96,9 @@ public struct Bracket<E: Error, R> {
     /// The combined Bracket owns **both** resources: acquire runs outer then inner;
     /// release runs inner then outer. If inner's acquire fails, outer is released
     /// before the failure is returned.
-    public func flatMap<S>(_ next: @escaping (R) -> Bracket<E, S>) -> Bracket<E, S> {
+    public func flatMap<S>(_ next: @escaping (R) -> Bracket<S, E>) -> Bracket<S, E> {
         let acquire = acquireResource
-        return Bracket<E, S>(acquireResource: {
+        return Bracket<S, E>(acquireResource: {
             acquire().flatMap { outer in
                 next(outer.value).acquireResource()
                     .tapError { _ in _ = outer.release() }
@@ -114,12 +114,12 @@ public struct Bracket<E: Error, R> {
     }
 
     /// Replaces the resource with a constant value.
-    public func `as`<S>(_ value: S) -> Bracket<E, S> {
+    public func `as`<S>(_ value: S) -> Bracket<S, E> {
         map { _ in value }
     }
 
     /// Discards the resource value, yielding `Void`.
-    public func asUnit() -> Bracket<E, Void> {
+    public func asUnit() -> Bracket<Void, E> {
         map { _ in () }
     }
 }

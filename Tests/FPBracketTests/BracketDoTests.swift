@@ -12,7 +12,7 @@ private func makeBracket<R>(
     _ tag: String,
     log: CallLog,
     resource: R
-) -> Bracket<TestError, R> {
+) -> Bracket<R, TestError> {
     Bracket(
         acquire: {
             log.record("acquire(\(tag))"); return .success(resource)
@@ -60,7 +60,7 @@ struct BracketDoTests {
         let log = CallLog()
         let pipeline = BracketDo<TestError>()
             .bind { makeBracket("a", log: log, resource: 1) }
-            .bind { _ -> Bracket<TestError, Int> in
+            .bind { _ -> Bracket<Int, TestError> in
                 Bracket(
                     acquire: {
                         log.record("acquire(b)"); return .failure(.fail)

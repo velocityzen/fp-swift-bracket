@@ -22,7 +22,7 @@ Then add `FPBracket` to your target's dependencies.
 Resources with a lifecycle — files, connections, locks, transactions — are awkward in `Result`-based code: every call site has to remember to release, even when the body fails. `Bracket` captures the lifecycle as a reusable value:
 
 ```swift
-let withFile: Bracket<MyError, File> = Bracket(
+let withFile: Bracket<File, MyError> = Bracket(
     acquire: { openFile(path) },
     dispose: { file in closeFile(file) }
 )
@@ -59,10 +59,10 @@ For pipelines that accumulate several resources into a tuple:
 
 ```swift
 let pipeline = BracketDo<MyError>()
-    .bind { withFile }                          // Bracket<MyError, File>
-    .bind { file in withDB(file) }              // Bracket<MyError, (File, DB)>
-    .let  { _, db in derivedKey(db) }           // Bracket<MyError, (File, DB, Key)>
-    .map  { file, _, key in (file, key) }       // Bracket<MyError, (File, Key)>
+    .bind { withFile }                          // Bracket<File, MyError>
+    .bind { file in withDB(file) }              // Bracket<(File, DB), MyError>
+    .let  { _, db in derivedKey(db) }           // Bracket<(File, DB, Key), MyError>
+    .map  { file, _, key in (file, key) }       // Bracket<(File, Key), MyError>
 
 let result = pipeline { (file, key) in encrypt(file, key) }
 ```
@@ -75,7 +75,7 @@ let combined = paths.traverse { withFile($0) }
 let summary = combined { files in summarize(files) }
 
 // Or build the brackets first, then sequence
-let brackets: [Bracket<E, Connection>] = configs.map(withConnection)
+let brackets: [Bracket<Connection, E>] = configs.map(withConnection)
 let scoped = brackets.sequence()
 ```
 
@@ -83,10 +83,10 @@ Resources are acquired left-to-right and released right-to-left. If any acquire 
 
 ## Async
 
-`BracketAsync<E, R>` mirrors every operation above for `async` acquire / dispose / use:
+`BracketAsync<R, E>` mirrors every operation above for `async` acquire / dispose / use:
 
 ```swift
-let withConnection: BracketAsync<DBError, Connection> = BracketAsync(
+let withConnection: BracketAsync<Connection, DBError> = BracketAsync(
     acquire: { await pool.checkOut() },
     dispose: { conn in await pool.release(conn) }
 )

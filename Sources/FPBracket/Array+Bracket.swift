@@ -31,9 +31,9 @@ public extension Array {
     /// ``Bracket/init(acquireResource:)``). The trade-off is worth it because
     /// `sequence` is the one place we expect to handle larger N (think:
     /// opening dozens of connections in parallel-then-scoped patterns).
-    func sequence<E, R>() -> Bracket<E, [R]> where Element == Bracket<E, R> {
+    func sequence<R, E>() -> Bracket<[R], E> where Element == Bracket<R, E> {
         let brackets = self
-        return Bracket<E, [R]>(acquireResource: {
+        return Bracket<[R], E>(acquireResource: {
             var values: [R] = []
             values.reserveCapacity(brackets.count)
 
@@ -75,9 +75,9 @@ public extension Array {
 
     /// Maps each element to a Bracket and sequences them.
     /// Equivalent to `map(transform).sequence()`.
-    func traverse<E, R>(
-        _ transform: (Element) -> Bracket<E, R>
-    ) -> Bracket<E, [R]> {
+    func traverse<R, E>(
+        _ transform: (Element) -> Bracket<R, E>
+    ) -> Bracket<[R], E> {
         map(transform).sequence()
     }
 }
@@ -87,10 +87,10 @@ public extension Array {
 public extension Array {
     /// Async variant of ``Swift/Array/sequence()-(_)`` for BracketAsync.
     /// See that overload for the rationale behind the imperative implementation.
-    func sequence<E, R>() -> BracketAsync<E, [R]>
-    where Element == BracketAsync<E, R> {
+    func sequence<R, E>() -> BracketAsync<[R], E>
+    where Element == BracketAsync<R, E> {
         let brackets = self
-        return BracketAsync<E, [R]>(acquireResource: {
+        return BracketAsync<[R], E>(acquireResource: {
             var values: [R] = []
             values.reserveCapacity(brackets.count)
 
@@ -125,9 +125,9 @@ public extension Array {
     }
 
     /// Async variant of ``Swift/Array/traverse(_:)`` for BracketAsync.
-    func traverse<E, R>(
-        _ transform: (Element) -> BracketAsync<E, R>
-    ) -> BracketAsync<E, [R]> {
+    func traverse<R, E>(
+        _ transform: (Element) -> BracketAsync<R, E>
+    ) -> BracketAsync<[R], E> {
         map(transform).sequence()
     }
 }

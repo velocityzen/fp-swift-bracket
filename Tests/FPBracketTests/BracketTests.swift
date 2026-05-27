@@ -17,7 +17,7 @@ private func makeBracket(
     _ tag: String,
     log: CallLog,
     resource: Int
-) -> Bracket<TestError, Int> {
+) -> Bracket<Int, TestError> {
     Bracket(
         acquire: {
             log.record("acquire(\(tag))"); return .success(resource)
@@ -49,7 +49,7 @@ struct BracketTests {
     @Test("acquire failure short-circuits and skips dispose")
     func acquireFails() {
         let log = CallLog()
-        let bracket = Bracket<TestError, Int>(
+        let bracket = Bracket<Int, TestError>(
             acquire: {
                 log.record("acquire"); return .failure(.acquireFailed)
             },
@@ -82,7 +82,7 @@ struct BracketTests {
 
     @Test("dispose failure wins over body success")
     func disposeOverridesUseSuccess() {
-        let bracket = Bracket<TestError, Int>(
+        let bracket = Bracket<Int, TestError>(
             acquire: { .success(1) },
             dispose: { _ in .failure(.disposeFailed) }
         )
@@ -93,7 +93,7 @@ struct BracketTests {
 
     @Test("dispose failure wins over body failure")
     func disposeOverridesUseFailure() {
-        let bracket = Bracket<TestError, Int>(
+        let bracket = Bracket<Int, TestError>(
             acquire: { .success(1) },
             dispose: { _ in .failure(.disposeFailed) }
         )
@@ -127,7 +127,7 @@ struct BracketTests {
     @Test("of yields the pure value with no acquire/dispose effect")
     func ofPure() {
         let log = CallLog()
-        let bracket = Bracket<TestError, Int>.of(42)
+        let bracket = Bracket<Int, TestError>.of(42)
         let result = bracket { r in
             log.record("use(\(r))")
             return Result<Int, TestError>.success(r)
@@ -184,7 +184,7 @@ struct BracketTests {
     func flatMapReleasesOuterOnInnerAcquireFailure() {
         let log = CallLog()
         let outer = makeBracket("outer", log: log, resource: 1)
-        let failingInner = Bracket<TestError, Int>(
+        let failingInner = Bracket<Int, TestError>(
             acquire: {
                 log.record("acquire(inner)")
                 return .failure(.innerAcquireFailed)
@@ -211,9 +211,9 @@ struct BracketTests {
 
     @Test("left identity: of(a).flatMap(f) == f(a)")
     func leftIdentity() {
-        let f: (Int) -> Bracket<TestError, String> = { n in .of("v=\(n)") }
+        let f: (Int) -> Bracket<String, TestError> = { n in .of("v=\(n)") }
 
-        let lhsBracket = Bracket<TestError, Int>.of(7).flatMap(f)
+        let lhsBracket = Bracket<Int, TestError>.of(7).flatMap(f)
         let lhs = lhsBracket { v in Result<String, TestError>.success(v) }
 
         let rhsBracket = f(7)
@@ -229,7 +229,7 @@ struct BracketTests {
         let m = makeBracket("a", log: logB, resource: 3)
 
         let lhsBracket = makeBracket("a", log: logA, resource: 3)
-            .flatMap(Bracket<TestError, Int>.of)
+            .flatMap(Bracket<Int, TestError>.of)
         let lhs = lhsBracket { r in Result<Int, TestError>.success(r) }
 
         let rhs = m { r in Result<Int, TestError>.success(r) }
@@ -242,10 +242,10 @@ struct BracketTests {
     func associativity() {
         let logA = CallLog()
         let logB = CallLog()
-        let f: (CallLog) -> (Int) -> Bracket<TestError, Int> = { log in
+        let f: (CallLog) -> (Int) -> Bracket<Int, TestError> = { log in
             { n in makeBracket("f\(n)", log: log, resource: n + 1) }
         }
-        let g: (CallLog) -> (Int) -> Bracket<TestError, Int> = { log in
+        let g: (CallLog) -> (Int) -> Bracket<Int, TestError> = { log in
             { n in makeBracket("g\(n)", log: log, resource: n * 10) }
         }
 
@@ -266,14 +266,14 @@ struct BracketTests {
 
     @Test("as replaces the resource with a constant")
     func asConstant() {
-        let bracket = Bracket<TestError, Int>.of(7).as("hello")
+        let bracket = Bracket<Int, TestError>.of(7).as("hello")
         let result = bracket { v in Result<String, TestError>.success(v) }
         #expect(result == .success("hello"))
     }
 
     @Test("asUnit discards the resource")
     func asUnitDiscards() {
-        let bracket = Bracket<TestError, Int>.of(7).asUnit()
+        let bracket = Bracket<Int, TestError>.of(7).asUnit()
         let result = bracket { _ in Result<Int, TestError>.success(1) }
         #expect(result == .success(1))
     }

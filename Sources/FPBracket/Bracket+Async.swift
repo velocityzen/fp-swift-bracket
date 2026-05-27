@@ -4,7 +4,7 @@ import FP
 ///
 /// Module-internal — extensions in other files (e.g. `Bracket+Sequence.swift`)
 /// build `BracketAsync` values directly via ``BracketAsync/init(acquireResource:)``.
-struct AsyncResource<E: Error, R> {
+struct AsyncResource<R, E: Error> {
     let value: R
     let release: () async -> Result<Void, E>
 }
@@ -14,7 +14,7 @@ struct AsyncResource<E: Error, R> {
 /// for the asynchronous suspension points.
 ///
 /// ```swift
-/// let withConnection: BracketAsync<DBError, Connection> = BracketAsync(
+/// let withConnection: BracketAsync<Connection, DBError> = BracketAsync(
 ///     acquire: { await pool.checkOut() },
 ///     dispose: { conn in await pool.release(conn) }
 /// )
@@ -23,12 +23,12 @@ struct AsyncResource<E: Error, R> {
 ///     await conn.query("SELECT * FROM users")
 /// }
 /// ```
-public struct BracketAsync<E: Error, R> {
+public struct BracketAsync<R, E: Error> {
     // Module-internal: extensions reach in to build new Brackets from a raw
     // scope thunk (see `Bracket+Sequence.swift`). Not part of the public API.
-    let acquireResource: () async -> Result<AsyncResource<E, R>, E>
+    let acquireResource: () async -> Result<AsyncResource<R, E>, E>
 
-    init(acquireResource: @escaping () async -> Result<AsyncResource<E, R>, E>) {
+    init(acquireResource: @escaping () async -> Result<AsyncResource<R, E>, E>) {
         self.acquireResource = acquireResource
     }
 
@@ -45,7 +45,7 @@ public struct BracketAsync<E: Error, R> {
     }
 
     /// A pure BracketAsync that yields `value` with a no-op acquire/dispose.
-    public static func of(_ value: R) -> BracketAsync<E, R> {
+    public static func of(_ value: R) -> BracketAsync<R, E> {
         BracketAsync(acquireResource: {
             .success(AsyncResource(value: value, release: { .success(()) }))
         })
@@ -64,9 +64,9 @@ public struct BracketAsync<E: Error, R> {
     }
 
     /// Transforms the resource view without changing the underlying acquire/dispose.
-    public func map<S>(_ transform: @escaping (R) -> S) -> BracketAsync<E, S> {
+    public func map<S>(_ transform: @escaping (R) -> S) -> BracketAsync<S, E> {
         let acquire = acquireResource
-        return BracketAsync<E, S>(acquireResource: {
+        return BracketAsync<S, E>(acquireResource: {
             await acquire().map { outer in
                 AsyncResource(value: transform(outer.value), release: outer.release)
             }
@@ -78,10 +78,10 @@ public struct BracketAsync<E: Error, R> {
     /// Acquire order is outer-then-inner; release order is inner-then-outer.
     /// If inner's acquire fails, outer is released before the failure is returned.
     public func flatMap<S>(
-        _ next: @escaping (R) -> BracketAsync<E, S>
-    ) -> BracketAsync<E, S> {
+        _ next: @escaping (R) -> BracketAsync<S, E>
+    ) -> BracketAsync<S, E> {
         let acquire = acquireResource
-        return BracketAsync<E, S>(acquireResource: {
+        return BracketAsync<S, E>(acquireResource: {
             await acquire().flatMapAsync { outer in
                 await next(outer.value).acquireResource()
                     .tapErrorAsync { _ in _ = await outer.release() }
@@ -97,12 +97,12 @@ public struct BracketAsync<E: Error, R> {
     }
 
     /// Replaces the resource with a constant value.
-    public func `as`<S>(_ value: S) -> BracketAsync<E, S> {
+    public func `as`<S>(_ value: S) -> BracketAsync<S, E> {
         map { _ in value }
     }
 
     /// Discards the resource value, yielding `Void`.
-    public func asUnit() -> BracketAsync<E, Void> {
+    public func asUnit() -> BracketAsync<Void, E> {
         map { _ in () }
     }
 }

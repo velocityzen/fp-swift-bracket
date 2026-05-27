@@ -13,7 +13,7 @@ private func makeAsyncBracket<R>(
     _ tag: String,
     log: AsyncLog,
     resource: R
-) -> BracketAsync<TestError, R> {
+) -> BracketAsync<R, TestError> {
     BracketAsync(
         acquire: {
             await log.record("acquire(\(tag))"); return .success(resource)
@@ -54,7 +54,7 @@ struct BracketAsyncDoTests {
         let log = AsyncLog()
         let pipeline = BracketAsyncDo<TestError>()
             .bind { makeAsyncBracket("a", log: log, resource: 1) }
-            .bind { _ -> BracketAsync<TestError, Int> in
+            .bind { _ -> BracketAsync<Int, TestError> in
                 BracketAsync(
                     acquire: {
                         await log.record("acquire(b)"); return .failure(.fail)

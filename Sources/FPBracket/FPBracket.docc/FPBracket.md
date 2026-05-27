@@ -8,7 +8,7 @@ It packages a resource's lifecycle — acquire, use, release — into a reusable
 value that is also a monad, so resources compose by `flatMap`.
 
 ```swift
-let withFile: Bracket<MyError, File> = Bracket(
+let withFile: Bracket<File, MyError> = Bracket(
     acquire: { openFile(path) },
     dispose: { file in closeFile(file) }
 )

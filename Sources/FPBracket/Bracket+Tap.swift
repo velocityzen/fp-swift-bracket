@@ -10,7 +10,7 @@ public extension Bracket {
     /// ```swift
     /// let withFileAndLock = withFile.tap { file in withLock(file) }
     /// ```
-    func tap<X>(_ action: @escaping (R) -> Bracket<E, X>) -> Bracket<E, R> {
+    func tap<X>(_ action: @escaping (R) -> Bracket<X, E>) -> Bracket<R, E> {
         flatMap { resource in action(resource).map { _ in resource } }
     }
 }
@@ -18,8 +18,8 @@ public extension Bracket {
 public extension BracketAsync {
     /// Async variant of ``Bracket/tap(_:)``.
     func tap<X>(
-        _ action: @escaping (R) -> BracketAsync<E, X>
-    ) -> BracketAsync<E, R> {
+        _ action: @escaping (R) -> BracketAsync<X, E>
+    ) -> BracketAsync<R, E> {
         flatMap { resource in action(resource).map { _ in resource } }
     }
 }
