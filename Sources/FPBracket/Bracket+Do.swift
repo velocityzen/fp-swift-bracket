@@ -1,5 +1,9 @@
 import FP
 
+// This file mirrors BracketAsync+Do.swift — the overloads differ only in the
+// Bracket vs BracketAsync type. When adding or changing an arity overload
+// here, make the same change there.
+
 // MARK: - Do Notation
 
 /// Starting point for Bracket's do-notation chain.
@@ -14,6 +18,14 @@ import FP
 ///     .let { _, db in derivedKey(db) }         // Bracket<(File, DB, Key), MyError>
 ///     .map { file, _, key in (file, key) }     // Bracket<(File, Key), MyError>
 /// ```
+///
+/// Flattening overloads of `bind` / `let` are provided for tuples of up to
+/// 10 elements. Past that point the chain still compiles but stops
+/// flattening: the generic pair overload takes over, the closure receives
+/// the accumulated tuple as a single value, and the result nests —
+/// `((A, …, J), Next)`. For pipelines that large, compose with
+/// ``Bracket/flatMap(_:)`` directly and shape the result with
+/// ``Bracket/map(_:)``.
 public struct BracketDo<E: Error> {
     public init() {}
 

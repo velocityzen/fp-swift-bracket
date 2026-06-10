@@ -1,11 +1,16 @@
 import FP
 
+// This file mirrors Bracket+Do.swift — the overloads differ only in the
+// BracketAsync vs Bracket type. When adding or changing an arity overload
+// here, make the same change there.
+
 // MARK: - Do Notation (Async)
 
 /// Starting point for BracketAsync's do-notation chain.
 ///
 /// Mirrors ``BracketDo`` for the async type. See ``BracketDo`` for an
-/// overview of the do-notation tuple-accumulating style.
+/// overview of the do-notation tuple-accumulating style and the 10-element
+/// flattening limit.
 public struct BracketAsyncDo<E: Error> {
     public init() {}
 

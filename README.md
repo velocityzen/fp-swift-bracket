@@ -67,6 +67,8 @@ let pipeline = BracketDo<MyError>()
 let result = pipeline { (file, key) in encrypt(file, key) }
 ```
 
+`bind` / `let` flatten the accumulated tuple for up to 10 elements. Past that the chain still compiles but nests instead of flattening — `((…), next)` — so for pipelines that large, compose with `flatMap` directly.
+
 ### Sequence / traverse over arrays
 
 ```swift
