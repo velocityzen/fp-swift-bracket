@@ -1,7 +1,10 @@
 import Testing
 @testable import FPBracket
 
-private enum TestError: Error, Equatable { case acquireFailed }
+private enum TestError: Error, Equatable {
+    case acquireFailed
+    case disposeFailed(String)
+}
 
 private final class CallLog {
     private(set) var events: [String] = []
@@ -40,6 +43,36 @@ private func makeAsyncBracket(
         },
         dispose: { _ in
             await log.record("dispose(\(tag))"); return .success(())
+        }
+    )
+}
+
+private func makeFailingDisposeBracket(
+    _ tag: String,
+    log: CallLog,
+    resource: Int
+) -> Bracket<Int, TestError> {
+    Bracket(
+        acquire: {
+            log.record("acquire(\(tag))"); return .success(resource)
+        },
+        dispose: { _ in
+            log.record("dispose(\(tag))"); return .failure(.disposeFailed(tag))
+        }
+    )
+}
+
+private func makeFailingDisposeAsyncBracket(
+    _ tag: String,
+    log: AsyncLog,
+    resource: Int
+) -> BracketAsync<Int, TestError> {
+    BracketAsync(
+        acquire: {
+            await log.record("acquire(\(tag))"); return .success(resource)
+        },
+        dispose: { _ in
+            await log.record("dispose(\(tag))"); return .failure(.disposeFailed(tag))
         }
     )
 }
@@ -99,6 +132,28 @@ struct ArrayBracketTests {
                 "acquire(a)",
                 "acquire(b)",
                 "dispose(a)",
+            ]
+        )
+    }
+
+    @Test("sequence: most recent dispose error wins; remaining disposes still run")
+    func sequenceDisposeFailurePrecedence() {
+        let log = CallLog()
+        let combined = [
+            makeFailingDisposeBracket("a", log: log, resource: 1),
+            makeFailingDisposeBracket("b", log: log, resource: 2),
+            makeBracket("c", log: log, resource: 3),
+        ].sequence()
+
+        let result = combined { resources in
+            Result<Int, TestError>.success(resources.reduce(0, +))
+        }
+
+        #expect(result == .failure(.disposeFailed("b")))
+        #expect(
+            log.events == [
+                "acquire(a)", "acquire(b)", "acquire(c)",
+                "dispose(c)", "dispose(b)", "dispose(a)",
             ]
         )
     }
@@ -182,6 +237,52 @@ struct ArrayBracketTests {
             await log.snapshot() == [
                 "acquire(a)", "acquire(b)", "acquire(c)",
                 "use([1, 2, 3])",
+                "dispose(c)", "dispose(b)", "dispose(a)",
+            ]
+        )
+    }
+
+    @Test("async sequence: previously acquired are released when a later acquire fails")
+    func asyncSequenceReleasesOnAcquireFailure() async {
+        let log = AsyncLog()
+        let brackets: [BracketAsync<Int, TestError>] = [
+            makeAsyncBracket("a", log: log, resource: 1),
+            BracketAsync(
+                acquire: {
+                    await log.record("acquire(b)")
+                    return .failure(.acquireFailed)
+                },
+                dispose: { _ in
+                    await log.record("dispose(b)"); return .success(())
+                }
+            ),
+            makeAsyncBracket("c", log: log, resource: 3),
+        ]
+
+        let combined = brackets.sequence()
+        let result = await combined { _ in Result<Int, TestError>.success(0) }
+
+        #expect(result == .failure(.acquireFailed))
+        #expect(await log.snapshot() == ["acquire(a)", "acquire(b)", "dispose(a)"])
+    }
+
+    @Test("async sequence: most recent dispose error wins; remaining disposes still run")
+    func asyncSequenceDisposeFailurePrecedence() async {
+        let log = AsyncLog()
+        let combined = [
+            makeFailingDisposeAsyncBracket("a", log: log, resource: 1),
+            makeFailingDisposeAsyncBracket("b", log: log, resource: 2),
+            makeAsyncBracket("c", log: log, resource: 3),
+        ].sequence()
+
+        let result = await combined { resources in
+            Result<Int, TestError>.success(resources.reduce(0, +))
+        }
+
+        #expect(result == .failure(.disposeFailed("b")))
+        #expect(
+            await log.snapshot() == [
+                "acquire(a)", "acquire(b)", "acquire(c)",
                 "dispose(c)", "dispose(b)", "dispose(a)",
             ]
         )

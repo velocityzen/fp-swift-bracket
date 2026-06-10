@@ -14,6 +14,13 @@ public extension Array {
     /// most recently acquired bracket's release error wins; subsequent dispose
     /// actions still run for cleanup but their errors are dropped.
     ///
+    /// ```swift
+    /// let brackets: [Bracket<Connection, PoolError>] = configs.map(withConnection)
+    /// let withAll: Bracket<[Connection], PoolError> = brackets.sequence()
+    ///
+    /// let report = withAll { connections in healthCheck(connections) }
+    /// ```
+    ///
     /// ## Implementation note
     ///
     /// This is written as an imperative loop rather than a
@@ -75,6 +82,11 @@ public extension Array {
 
     /// Maps each element to a Bracket and sequences them.
     /// Equivalent to `map(transform).sequence()`.
+    ///
+    /// ```swift
+    /// let withFiles: Bracket<[File], MyError> = paths
+    ///     .traverse { path in withFile(path) }
+    /// ```
     func traverse<R, E>(
         _ transform: (Element) -> Bracket<R, E>
     ) -> Bracket<[R], E> {

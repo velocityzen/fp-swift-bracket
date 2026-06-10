@@ -104,6 +104,16 @@ let rows = await withConnection { conn in
 
 Full API reference: [swiftpackageindex.com/velocityzen/fp-swift-bracket/documentation/fpbracket](https://swiftpackageindex.com/velocityzen/fp-swift-bracket/documentation/fpbracket)
 
+## Benchmarks
+
+A small dependency-free benchmark harness lives in `Benchmarks/` — a separate package, so library consumers never resolve it:
+
+```sh
+swift run --package-path Benchmarks -c release FPBracketBenchmarks
+```
+
+It reports medians for `Array.sequence` at N = 10 / 100 / 1000 (the per-element cost should stay flat — that's the documented O(N) implementation at work), nested `flatMap` chains, and the per-call overhead of `Bracket` / `BracketAsync`. CI runs it in `--quick` mode as a smoke test.
+
 ## Note on trailing-closure syntax
 
 `Bracket` / `BracketAsync` are invoked via `callAsFunction`. Swift's trailing-closure rule attaches `{ … }` to the *method call*, not to its result, so an immediate call on a chained expression won't parse:

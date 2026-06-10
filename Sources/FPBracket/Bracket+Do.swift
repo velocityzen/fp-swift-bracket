@@ -43,6 +43,8 @@ public struct BracketDo<E: Error> {
 // MARK: - bind / let (1 → 2)
 
 public extension Bracket {
+    /// Pairs this Bracket's resource with the next one's, starting a
+    /// do-notation tuple. See ``BracketDo`` for the flattening limit.
     @_disfavoredOverload
     func bind<B>(
         _ fn: @escaping (R) -> Bracket<B, E>
@@ -50,6 +52,8 @@ public extension Bracket {
         flatMap { a in fn(a).map { b in (a, b) } }
     }
 
+    /// Pairs this Bracket's resource with a pure value, starting a
+    /// do-notation tuple. See ``BracketDo`` for the flattening limit.
     @_disfavoredOverload
     func `let`<B>(
         _ fn: @escaping (R) -> B
@@ -61,12 +65,16 @@ public extension Bracket {
 // MARK: - bind / let (2 → 3)
 
 public extension Bracket {
+    /// Chains the next Bracket, widening the accumulated tuple to 3 elements.
+    /// See ``BracketDo`` for the do-notation overview and flattening limit.
     func bind<A, B, C>(
         _ fn: @escaping (A, B) -> Bracket<C, E>
     ) -> Bracket<(A, B, C), E> where R == (A, B) {
         flatMap { a, b in fn(a, b).map { c in (a, b, c) } }
     }
 
+    /// Appends a pure value, widening the accumulated tuple to 3 elements.
+    /// See ``BracketDo`` for the do-notation overview and flattening limit.
     func `let`<A, B, C>(
         _ fn: @escaping (A, B) -> C
     ) -> Bracket<(A, B, C), E> where R == (A, B) {
@@ -77,12 +85,16 @@ public extension Bracket {
 // MARK: - bind / let (3 → 4)
 
 public extension Bracket {
+    /// Chains the next Bracket, widening the accumulated tuple to 4 elements.
+    /// See ``BracketDo`` for the do-notation overview and flattening limit.
     func bind<A, B, C, D>(
         _ fn: @escaping (A, B, C) -> Bracket<D, E>
     ) -> Bracket<(A, B, C, D), E> where R == (A, B, C) {
         flatMap { a, b, c in fn(a, b, c).map { d in (a, b, c, d) } }
     }
 
+    /// Appends a pure value, widening the accumulated tuple to 4 elements.
+    /// See ``BracketDo`` for the do-notation overview and flattening limit.
     func `let`<A, B, C, D>(
         _ fn: @escaping (A, B, C) -> D
     ) -> Bracket<(A, B, C, D), E> where R == (A, B, C) {
@@ -93,12 +105,16 @@ public extension Bracket {
 // MARK: - bind / let (4 → 5)
 
 public extension Bracket {
+    /// Chains the next Bracket, widening the accumulated tuple to 5 elements.
+    /// See ``BracketDo`` for the do-notation overview and flattening limit.
     func bind<A, B, C, D, F>(
         _ fn: @escaping (A, B, C, D) -> Bracket<F, E>
     ) -> Bracket<(A, B, C, D, F), E> where R == (A, B, C, D) {
         flatMap { a, b, c, d in fn(a, b, c, d).map { f in (a, b, c, d, f) } }
     }
 
+    /// Appends a pure value, widening the accumulated tuple to 5 elements.
+    /// See ``BracketDo`` for the do-notation overview and flattening limit.
     func `let`<A, B, C, D, F>(
         _ fn: @escaping (A, B, C, D) -> F
     ) -> Bracket<(A, B, C, D, F), E> where R == (A, B, C, D) {
@@ -109,12 +125,16 @@ public extension Bracket {
 // MARK: - bind / let (5 → 6)
 
 public extension Bracket {
+    /// Chains the next Bracket, widening the accumulated tuple to 6 elements.
+    /// See ``BracketDo`` for the do-notation overview and flattening limit.
     func bind<A, B, C, D, F, G>(
         _ fn: @escaping (A, B, C, D, F) -> Bracket<G, E>
     ) -> Bracket<(A, B, C, D, F, G), E> where R == (A, B, C, D, F) {
         flatMap { a, b, c, d, f in fn(a, b, c, d, f).map { g in (a, b, c, d, f, g) } }
     }
 
+    /// Appends a pure value, widening the accumulated tuple to 6 elements.
+    /// See ``BracketDo`` for the do-notation overview and flattening limit.
     func `let`<A, B, C, D, F, G>(
         _ fn: @escaping (A, B, C, D, F) -> G
     ) -> Bracket<(A, B, C, D, F, G), E> where R == (A, B, C, D, F) {
@@ -125,6 +145,8 @@ public extension Bracket {
 // MARK: - bind / let (6 → 7)
 
 public extension Bracket {
+    /// Chains the next Bracket, widening the accumulated tuple to 7 elements.
+    /// See ``BracketDo`` for the do-notation overview and flattening limit.
     func bind<A, B, C, D, F, G, H>(
         _ fn: @escaping (A, B, C, D, F, G) -> Bracket<H, E>
     ) -> Bracket<(A, B, C, D, F, G, H), E> where R == (A, B, C, D, F, G) {
@@ -133,6 +155,8 @@ public extension Bracket {
         }
     }
 
+    /// Appends a pure value, widening the accumulated tuple to 7 elements.
+    /// See ``BracketDo`` for the do-notation overview and flattening limit.
     func `let`<A, B, C, D, F, G, H>(
         _ fn: @escaping (A, B, C, D, F, G) -> H
     ) -> Bracket<(A, B, C, D, F, G, H), E> where R == (A, B, C, D, F, G) {
@@ -143,6 +167,8 @@ public extension Bracket {
 // MARK: - bind / let (7 → 8)
 
 public extension Bracket {
+    /// Chains the next Bracket, widening the accumulated tuple to 8 elements.
+    /// See ``BracketDo`` for the do-notation overview and flattening limit.
     func bind<A, B, C, D, F, G, H, I>(
         _ fn: @escaping (A, B, C, D, F, G, H) -> Bracket<I, E>
     ) -> Bracket<(A, B, C, D, F, G, H, I), E> where R == (A, B, C, D, F, G, H) {
@@ -151,6 +177,8 @@ public extension Bracket {
         }
     }
 
+    /// Appends a pure value, widening the accumulated tuple to 8 elements.
+    /// See ``BracketDo`` for the do-notation overview and flattening limit.
     func `let`<A, B, C, D, F, G, H, I>(
         _ fn: @escaping (A, B, C, D, F, G, H) -> I
     ) -> Bracket<(A, B, C, D, F, G, H, I), E> where R == (A, B, C, D, F, G, H) {
@@ -163,6 +191,8 @@ public extension Bracket {
 // MARK: - bind / let (8 → 9)
 
 public extension Bracket {
+    /// Chains the next Bracket, widening the accumulated tuple to 9 elements.
+    /// See ``BracketDo`` for the do-notation overview and flattening limit.
     func bind<A, B, C, D, F, G, H, I, J>(
         _ fn: @escaping (A, B, C, D, F, G, H, I) -> Bracket<J, E>
     ) -> Bracket<(A, B, C, D, F, G, H, I, J), E>
@@ -172,6 +202,8 @@ public extension Bracket {
         }
     }
 
+    /// Appends a pure value, widening the accumulated tuple to 9 elements.
+    /// See ``BracketDo`` for the do-notation overview and flattening limit.
     func `let`<A, B, C, D, F, G, H, I, J>(
         _ fn: @escaping (A, B, C, D, F, G, H, I) -> J
     ) -> Bracket<(A, B, C, D, F, G, H, I, J), E>
@@ -185,6 +217,9 @@ public extension Bracket {
 // MARK: - bind / let (9 → 10)
 
 public extension Bracket {
+    /// Chains the next Bracket, widening the accumulated tuple to 10 elements —
+    /// the last flattening arity. Past this point the chain still compiles but
+    /// nests instead of flattening; see ``BracketDo``.
     func bind<A, B, C, D, F, G, H, I, J, K>(
         _ fn: @escaping (A, B, C, D, F, G, H, I, J) -> Bracket<K, E>
     ) -> Bracket<(A, B, C, D, F, G, H, I, J, K), E>
@@ -194,6 +229,9 @@ public extension Bracket {
         }
     }
 
+    /// Appends a pure value, widening the accumulated tuple to 10 elements —
+    /// the last flattening arity. Past this point the chain still compiles but
+    /// nests instead of flattening; see ``BracketDo``.
     func `let`<A, B, C, D, F, G, H, I, J, K>(
         _ fn: @escaping (A, B, C, D, F, G, H, I, J) -> K
     ) -> Bracket<(A, B, C, D, F, G, H, I, J, K), E>

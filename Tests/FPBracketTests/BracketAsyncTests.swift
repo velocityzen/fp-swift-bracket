@@ -227,4 +227,20 @@ struct BracketAsyncTests {
         #expect(lhs == rhs)
         #expect(await logA.snapshot() == (await logB.snapshot()))
     }
+
+    // MARK: - as / asUnit
+
+    @Test("as replaces the resource with a constant")
+    func asConstant() async {
+        let bracket = BracketAsync<Int, TestError>.of(7).as("hello")
+        let result = await bracket { v in Result<String, TestError>.success(v) }
+        #expect(result == .success("hello"))
+    }
+
+    @Test("asUnit discards the resource")
+    func asUnitDiscards() async {
+        let bracket = BracketAsync<Int, TestError>.of(7).asUnit()
+        let result = await bracket { _ in Result<Int, TestError>.success(1) }
+        #expect(result == .success(1))
+    }
 }

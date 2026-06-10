@@ -91,4 +91,52 @@ struct BracketDoTests {
 
         #expect(result == .success(6))
     }
+
+    @Test("bind chain flattens through every arity up to 10 elements")
+    func bindChainAllArities() {
+        let log = CallLog()
+        let pipeline = BracketDo<TestError>()
+            .bind { makeBracket("r1", log: log, resource: 1) }
+            .bind { _ in makeBracket("r2", log: log, resource: 2) }
+            .bind { _, _ in makeBracket("r3", log: log, resource: 3) }
+            .bind { _, _, _ in makeBracket("r4", log: log, resource: 4) }
+            .bind { _, _, _, _ in makeBracket("r5", log: log, resource: 5) }
+            .bind { _, _, _, _, _ in makeBracket("r6", log: log, resource: 6) }
+            .bind { _, _, _, _, _, _ in makeBracket("r7", log: log, resource: 7) }
+            .bind { _, _, _, _, _, _, _ in makeBracket("r8", log: log, resource: 8) }
+            .bind { _, _, _, _, _, _, _, _ in makeBracket("r9", log: log, resource: 9) }
+            .bind { _, _, _, _, _, _, _, _, _ in makeBracket("r10", log: log, resource: 10) }
+
+        let result = pipeline { tuple in
+            let (a, b, c, d, f, g, h, i, j, k) = tuple
+            return Result<[Int], TestError>.success([a, b, c, d, f, g, h, i, j, k])
+        }
+
+        #expect(result == .success(Array(1...10)))
+        let acquires = (1...10).map { "acquire(r\($0))" }
+        let disposes = (1...10).reversed().map { "dispose(r\($0))" }
+        #expect(log.events == acquires + disposes)
+    }
+
+    @Test("let chain flattens through every arity up to 10 elements")
+    func letChainAllArities() {
+        let pipeline = BracketDo<TestError>()
+            .let { 1 }
+            .let { a in a + 1 }
+            .let { _, b in b + 1 }
+            .let { _, _, c in c + 1 }
+            .let { _, _, _, d in d + 1 }
+            .let { _, _, _, _, f in f + 1 }
+            .let { _, _, _, _, _, g in g + 1 }
+            .let { _, _, _, _, _, _, h in h + 1 }
+            .let { _, _, _, _, _, _, _, i in i + 1 }
+            .let { _, _, _, _, _, _, _, _, j in j + 1 }
+
+        let result = pipeline { tuple in
+            let (a, b, c, d, f, g, h, i, j, k) = tuple
+            return Result<[Int], TestError>.success([a, b, c, d, f, g, h, i, j, k])
+        }
+
+        #expect(result == .success(Array(1...10)))
+    }
 }

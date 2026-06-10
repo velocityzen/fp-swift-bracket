@@ -31,6 +31,25 @@ let lines    = withFile { file in countLines(file) }
   order is outer-then-inner; release order is inner-then-outer. If inner's
   acquire fails, outer is released before the failure is returned.
 
+**Do-notation**
+
+``BracketDo`` (and ``BracketAsyncDo``) start `bind` / `let` chains that
+accumulate resources into a flat tuple — up to 10 elements, past which
+results nest instead of flattening:
+
+```swift
+let pipeline = BracketDo<MyError>()
+    .bind { withFile }                  // Bracket<File, MyError>
+    .bind { file in withDB(file) }      // Bracket<(File, DB), MyError>
+    .let { _, db in derivedKey(db) }    // Bracket<(File, DB, Key), MyError>
+```
+
+**Collections**
+
+`Array.sequence()` combines `[Bracket<R, E>]` into a single `Bracket<[R], E>`;
+`Array.traverse(_:)` maps and sequences in one step. Resources are acquired
+left-to-right and released right-to-left, with cleanup on partial failure.
+
 The async counterpart ``BracketAsync`` follows the same semantics over
 `async` acquire / dispose / use callbacks.
 

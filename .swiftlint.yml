@@ -6,7 +6,9 @@
 # Where SwiftLint should NOT look.
 excluded:
   - .build
+  - Benchmarks/.build
   - Package.swift
+  - Benchmarks/Package.swift
   - Sources/FPBracket/FPBracket.docc
 
 # Disable rules that fight the DSL conventions.
@@ -37,6 +39,9 @@ opt_in_rules:
   - toggle_bool
   - unneeded_parentheses_in_closure_argument
   - yoda_condition
+
+# Analyzer rules need full type information — they run under `swiftlint analyze`, not plain `swiftlint`.
+analyzer_rules:
   - explicit_self # Encourages `self.` only where actually needed.
 
 # Tunings for kept rules.
