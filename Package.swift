@@ -5,7 +5,7 @@ import PackageDescription
 
 let package = Package(
     name: "fp-swift-bracket",
-    platforms: [.macOS(.v15), .iOS(.v18)],
+    platforms: [.macOS(.v10_15), .iOS(.v13)],
     products: [
         // Products define the executables and libraries a package produces, making them visible to other packages.
         .library(
@@ -14,10 +14,10 @@ let package = Package(
         )
     ],
     dependencies: [
-        .package(url: "https://github.com/velocityzen/fp-swift", from: "2.4.0")
+        .package(url: "https://github.com/velocityzen/fp-swift", from: "3.0.1")
     ],
     targets: [
-        // Targets are the basic building blocks of a package, defining a module or a test suite.
+        // Targets are the basic building blocks of a package, defining a module or a test suite.`
         // Targets can depend on other targets in this package and products from dependencies.
         .target(
             name: "FPBracket",
