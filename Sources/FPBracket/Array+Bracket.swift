@@ -34,8 +34,8 @@ public extension Array {
     ///
     /// The imperative form below threads two mutable arrays (`values`,
     /// `releases`) and is O(N) end-to-end at the cost of reaching into
-    /// `Bracket`'s module-internal storage (``Resource`` and
-    /// ``Bracket/init(acquireResource:)``). The trade-off is worth it because
+    /// `Bracket`'s module-internal storage (`Resource` and
+    /// `Bracket.init(acquireResource:)`). The trade-off is worth it because
     /// `sequence` is the one place we expect to handle larger N (think:
     /// opening dozens of connections in parallel-then-scoped patterns).
     func sequence<R, E>() -> Bracket<[R], E> where Element == Bracket<R, E> {
@@ -97,7 +97,7 @@ public extension Array {
 // MARK: - Array.sequence() / .traverse(_:) for BracketAsync
 
 public extension Array {
-    /// Async variant of ``Swift/Array/sequence()-(_)`` for BracketAsync.
+    /// Async variant of ``Swift/Array/sequence()->Bracket<[R],E>`` for BracketAsync.
     /// See that overload for the rationale behind the imperative implementation.
     func sequence<R, E>() -> BracketAsync<[R], E>
     where Element == BracketAsync<R, E> {
@@ -136,7 +136,7 @@ public extension Array {
         })
     }
 
-    /// Async variant of ``Swift/Array/traverse(_:)`` for BracketAsync.
+    /// Async variant of ``Swift/Array/traverse(_:)->Bracket<[R],E>`` for BracketAsync.
     func traverse<R, E>(
         _ transform: (Element) -> BracketAsync<R, E>
     ) -> BracketAsync<[R], E> {

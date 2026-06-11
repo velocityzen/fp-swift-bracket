@@ -46,9 +46,10 @@ let pipeline = BracketDo<MyError>()
 
 **Collections**
 
-`Array.sequence()` combines `[Bracket<R, E>]` into a single `Bracket<[R], E>`;
-`Array.traverse(_:)` maps and sequences in one step. Resources are acquired
-left-to-right and released right-to-left, with cleanup on partial failure.
+``Swift/Array/sequence()->Bracket<[R],E>`` combines `[Bracket<R, E>]` into a
+single `Bracket<[R], E>`; ``Swift/Array/traverse(_:)->Bracket<[R],E>`` maps
+and sequences in one step. Resources are acquired left-to-right and released
+right-to-left, with cleanup on partial failure.
 
 The async counterpart ``BracketAsync`` follows the same semantics over
 `async` acquire / dispose / use callbacks.
@@ -66,6 +67,8 @@ The async counterpart ``BracketAsync`` follows the same semantics over
 - ``Bracket/tap(_:)``
 - ``Bracket/as(_:)``
 - ``Bracket/asUnit()``
+- ``Swift/Array/sequence()->Bracket<[R],E>``
+- ``Swift/Array/traverse(_:)->Bracket<[R],E>``
 
 ### Sync do-notation
 
@@ -84,6 +87,8 @@ The async counterpart ``BracketAsync`` follows the same semantics over
 - ``BracketAsync/tap(_:)``
 - ``BracketAsync/as(_:)``
 - ``BracketAsync/asUnit()``
+- ``Swift/Array/sequence()->BracketAsync<[R],E>``
+- ``Swift/Array/traverse(_:)->BracketAsync<[R],E>``
 
 ### Async do-notation
 
