@@ -277,4 +277,29 @@ struct BracketTests {
         let result = bracket { _ in Result<Int, TestError>.success(1) }
         #expect(result == .success(1))
     }
+
+    // MARK: - fromAcquire
+
+    @Test("fromAcquire lifts a fallible computation; acquire re-runs per call")
+    func fromAcquireLifts() {
+        let log = CallLog()
+        let bracket = Bracket<Int, TestError>.fromAcquire {
+            log.record("acquire")
+            return .success(5)
+        }
+
+        let r1 = bracket { v in Result<Int, TestError>.success(v * 2) }
+        let r2 = bracket { v in Result<Int, TestError>.success(v + 1) }
+
+        #expect(r1 == .success(10))
+        #expect(r2 == .success(6))
+        #expect(log.events == ["acquire", "acquire"])
+    }
+
+    @Test("fromAcquire propagates acquire failure")
+    func fromAcquireFails() {
+        let bracket = Bracket<Int, TestError>.fromAcquire { .failure(.acquireFailed) }
+        let result = bracket { _ in Result<Int, TestError>.success(0) }
+        #expect(result == .failure(.acquireFailed))
+    }
 }

@@ -61,6 +61,7 @@ The async counterpart ``BracketAsync`` follows the same semantics over
 - ``Bracket``
 - ``Bracket/init(acquire:dispose:)``
 - ``Bracket/of(_:)``
+- ``Bracket/fromAcquire(_:)``
 - ``Bracket/callAsFunction(_:)``
 - ``Bracket/map(_:)``
 - ``Bracket/flatMap(_:)``
@@ -81,6 +82,10 @@ The async counterpart ``BracketAsync`` follows the same semantics over
 - ``BracketAsync``
 - ``BracketAsync/init(acquire:dispose:)``
 - ``BracketAsync/of(_:)``
+- ``BracketAsync/fromAcquire(_:)``
+- ``BracketAsync/fromTask(_:)->BracketAsync<R,E>``
+- ``BracketAsync/fromTask(_:)->BracketAsync<R,Error>``
+- ``BracketAsync/fromTask(_:)->BracketAsync<R,Never>``
 - ``BracketAsync/callAsFunction(_:)``
 - ``BracketAsync/map(_:)``
 - ``BracketAsync/flatMap(_:)``

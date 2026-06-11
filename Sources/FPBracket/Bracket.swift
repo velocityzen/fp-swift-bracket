@@ -68,6 +68,22 @@ public struct Bracket<R, E: Error> {
         })
     }
 
+    /// A Bracket whose acquire can fail but owns no resource to clean up.
+    ///
+    /// Unlike ``of(_:)``, the value is computed lazily on every call and the
+    /// computation can fail. `dispose` is a no-op. Useful for fallible steps
+    /// in a `flatMap` or do-notation chain — loading configuration, validating
+    /// input — that don't need a release phase.
+    ///
+    /// ```swift
+    /// let withConfig = Bracket<Config, ConfigError>.fromAcquire { loadConfig() }
+    /// ```
+    public static func fromAcquire(
+        _ acquire: @escaping () -> Result<R, E>
+    ) -> Bracket<R, E> {
+        Bracket(acquire: acquire, dispose: { _ in .success(()) })
+    }
+
     /// Runs `body` with the acquired resource, releasing it afterwards.
     ///
     /// Invoked via call syntax: `bracket { resource in ... }`.

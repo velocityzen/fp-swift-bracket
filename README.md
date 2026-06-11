@@ -55,6 +55,20 @@ let withFileAndDB = withFile.flatMap { file in withDB(file) }
 let withFileAndLock = withFile.tap { file in withLock(file) }
 ```
 
+### Brackets without cleanup
+
+Not every step owns a resource. `fromAcquire` lifts a fallible computation into a bracket with a no-op dispose; `fromTask` does the same for Swift `Task`s on the async side:
+
+```swift
+let withConfig = Bracket<Config, ConfigError>.fromAcquire { loadConfig() }
+
+let withUser = BracketAsync<User, Error>.fromTask {
+    Task { try await api.fetchUser() }
+}
+```
+
+Each call runs a fresh acquire (or task), and the result composes like any other bracket — handy in `flatMap` / do-notation chains for failable steps that don't need a release phase. `fromTask` also accepts typed-error tasks (`Task<Result<R, E>, Never>`) and non-failing tasks (`Task<R, Never>`).
+
 ### Do-notation
 
 For pipelines that accumulate several resources into a tuple:

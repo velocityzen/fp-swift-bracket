@@ -243,4 +243,72 @@ struct BracketAsyncTests {
         let result = await bracket { _ in Result<Int, TestError>.success(1) }
         #expect(result == .success(1))
     }
+
+    // MARK: - fromAcquire / fromTask
+
+    @Test("fromAcquire lifts a fallible async computation; acquire re-runs per call")
+    func fromAcquireLifts() async {
+        let log = CallLog()
+        let bracket = BracketAsync<Int, TestError>.fromAcquire {
+            await log.record("acquire")
+            return .success(5)
+        }
+
+        let r1 = await bracket { v in Result<Int, TestError>.success(v * 2) }
+        let r2 = await bracket { v in Result<Int, TestError>.success(v + 1) }
+
+        #expect(r1 == .success(10))
+        #expect(r2 == .success(6))
+        #expect(await log.snapshot() == ["acquire", "acquire"])
+    }
+
+    @Test("fromAcquire propagates acquire failure")
+    func fromAcquireFails() async {
+        let bracket = BracketAsync<Int, TestError>.fromAcquire { .failure(.acquireFailed) }
+        let result = await bracket { _ in Result<Int, TestError>.success(0) }
+        #expect(result == .failure(.acquireFailed))
+    }
+
+    @Test("fromTask wraps a task that yields a typed Result")
+    func fromTaskTypedResult() async {
+        let bracket = BracketAsync<Int, TestError>.fromTask {
+            Task { .success(21) }
+        }
+        let result = await bracket { v in Result<Int, TestError>.success(v * 2) }
+        #expect(result == .success(42))
+    }
+
+    @Test("fromTask propagates a typed failure from the task")
+    func fromTaskTypedFailure() async {
+        let bracket = BracketAsync<Int, TestError>.fromTask {
+            Task { .failure(.acquireFailed) }
+        }
+        let result = await bracket { _ in Result<Int, TestError>.success(0) }
+        #expect(result == .failure(.acquireFailed))
+    }
+
+    @Test("fromTask converts a throwing task's error into the failure")
+    func fromTaskThrowing() async {
+        let succeeding = BracketAsync<Int, Error>.fromTask { Task { 21 } }
+        let ok = await succeeding { v in Result<Int, Error>.success(v * 2) }
+        #expect((try? ok.get()) == 42)
+
+        let failing = BracketAsync<Int, Error>.fromTask {
+            Task { throw TestError.acquireFailed }
+        }
+        let result = await failing { _ in Result<Int, Error>.success(0) }
+        switch result {
+            case .success:
+                Issue.record("expected failure")
+            case .failure(let error):
+                #expect(error as? TestError == .acquireFailed)
+        }
+    }
+
+    @Test("fromTask wraps a task that cannot fail")
+    func fromTaskNever() async {
+        let bracket = BracketAsync<Int, Never>.fromTask { Task { 7 } }
+        let result = await bracket { v in Result<Int, Never>.success(v + 1) }
+        #expect(result == .success(8))
+    }
 }

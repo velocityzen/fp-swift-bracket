@@ -51,6 +51,21 @@ public struct BracketAsync<R, E: Error> {
         })
     }
 
+    /// A BracketAsync whose acquire can fail but owns no resource to clean up.
+    ///
+    /// Async counterpart of ``Bracket/fromAcquire(_:)``: the value is computed
+    /// lazily on every call, the computation can fail, and `dispose` is a
+    /// no-op.
+    ///
+    /// ```swift
+    /// let withUser = BracketAsync<User, APIError>.fromAcquire { await fetchUser() }
+    /// ```
+    public static func fromAcquire(
+        _ acquire: @escaping () async -> Result<R, E>
+    ) -> BracketAsync<R, E> {
+        BracketAsync(acquire: acquire, dispose: { _ in .success(()) })
+    }
+
     /// Runs `body` with the acquired resource, releasing it afterwards.
     ///
     /// Invoked via call syntax: `await bracket { resource in ... }`.
