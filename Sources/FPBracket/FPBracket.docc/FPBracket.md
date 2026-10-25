@@ -52,9 +52,15 @@ and sequences in one step. Resources are acquired left-to-right and released
 right-to-left, with cleanup on partial failure.
 
 The async counterpart ``BracketAsync`` follows the same semantics over
-`async` acquire / dispose / use callbacks.
+`async` acquire / dispose / use callbacks. Dispose still runs when the
+calling task is cancelled; see <doc:Cancellation> for what that means for
+async cleanup.
 
 ## Topics
+
+### Guides
+
+- <doc:Cancellation>
 
 ### Sync resource lifecycle
 
@@ -81,6 +87,8 @@ The async counterpart ``BracketAsync`` follows the same semantics over
 
 - ``BracketAsync``
 - ``BracketAsync/init(acquire:dispose:)``
+- ``BracketAsync/init(acquire:uncancellableDispose:)``
+- ``BracketAsync/throwing(acquire:dispose:)``
 - ``BracketAsync/of(_:)``
 - ``BracketAsync/fromAcquire(_:)``
 - ``BracketAsync/fromTask(_:)->BracketAsync<R,E>``

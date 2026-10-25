@@ -116,6 +116,46 @@ let rows = await withConnection { conn in
 
 `BracketAsyncDo<E>`, `.tap`, `.sequence()`, `.traverse(_:)` are all available on the async side.
 
+### Wrapping throwing APIs
+
+Most SDKs expose `async throws` APIs. `BracketAsync.throwing` wraps them into a `BracketAsync<R, any Error>`, so a thrown error becomes the failure:
+
+```swift
+let withSession = BracketAsync.throwing(
+    acquire: { try await client.openSession() },
+    dispose: { session in try await session.close() }
+)
+
+let profile = await withSession { session in
+    await Result.fromAsync { try await session.fetchProfile() }
+}
+```
+
+Use it where your code meets the throwing API, and work in `Result` from there on. The usual semantics apply: if `acquire` throws, `dispose` is skipped, and if `dispose` throws, that error wins over the body's outcome.
+
+### Cancellation
+
+If the calling task is cancelled, `dispose` is still called, once, after the body returns, and nested releases keep their order. It runs in the *cancelled* task, though, so `Task.isCancelled` is `true` and any cancellation-aware work it awaits (network calls, `Task.sleep`) fails immediately. Synchronous and actor-based cleanup is unaffected. For async cleanup, pick one:
+
+```swift
+// Fast path: an abrupt but complete cleanup when cancelled
+dispose: { conn in
+    if Task.isCancelled {
+        conn.abort()
+        return .success(())
+    }
+    return await conn.closeGracefully()
+}
+
+// Must complete: make the dispose uncancellable (resource must be Sendable)
+let withTransaction = BracketAsync<Transaction, DBError>(
+    acquire: { await db.begin() },
+    uncancellableDispose: { tx in await tx.rollbackIfOpen() }
+)
+```
+
+`fromTask` forwards cancellation to the task it creates. The [Handling Cancellation](https://swiftpackageindex.com/velocityzen/fp-swift-bracket/documentation/fpbracket/cancellation) guide covers the body side, acquire cleanup, shared tasks, and testing.
+
 ## Documentation
 
 Full API reference: [swiftpackageindex.com/velocityzen/fp-swift-bracket/documentation/fpbracket](https://swiftpackageindex.com/velocityzen/fp-swift-bracket/documentation/fpbracket)

@@ -44,6 +44,37 @@ public struct BracketAsync<R, E: Error> {
         }
     }
 
+    /// Builds a BracketAsync whose dispose can't be cancelled.
+    ///
+    /// Same as ``init(acquire:dispose:)``, except `uncancellableDispose` runs in
+    /// a fresh unstructured `Task`, which doesn't inherit the caller's
+    /// cancellation. Cancellation-aware cleanup (network calls, `Task.sleep`)
+    /// therefore completes even when the caller is cancelled. The bracket
+    /// stays structured: it awaits the cleanup before returning.
+    ///
+    /// Use it for cleanup that must finish, such as rolling back a remote
+    /// transaction or releasing a distributed lock. That work can't
+    /// be cancelled, so give it its own timeout if it might hang. See
+    /// <doc:Cancellation>.
+    ///
+    /// ```swift
+    /// let withTransaction = BracketAsync<Transaction, DBError>(
+    ///     acquire: { await db.begin() },
+    ///     uncancellableDispose: { tx in await tx.rollbackIfOpen() }
+    /// )
+    /// ```
+    public init(
+        acquire: @escaping () async -> Result<R, E>,
+        uncancellableDispose: @escaping @Sendable (R) async -> Result<Void, E>
+    ) where R: Sendable, E: Sendable {
+        self.init(
+            acquire: acquire,
+            dispose: { value in
+                await Task { await uncancellableDispose(value) }.value
+            }
+        )
+    }
+
     /// A pure BracketAsync that yields `value` with a no-op acquire/dispose.
     public static func of(_ value: R) -> BracketAsync<R, E> {
         BracketAsync(acquireResource: {
@@ -69,6 +100,18 @@ public struct BracketAsync<R, E: Error> {
     /// Runs `body` with the acquired resource, releasing it afterwards.
     ///
     /// Invoked via call syntax: `await bracket { resource in ... }`.
+    ///
+    /// ## Cancellation
+    ///
+    /// Cancellation is cooperative: if the calling task is cancelled, `body`
+    /// decides how to react, and release still runs once `body` returns. That
+    /// includes nested releases from ``flatMap(_:)`` and `Array.sequence()`.
+    /// Release runs in the *cancelled* task, though, so a dispose that awaits
+    /// cancellation-aware work (`Task.sleep`, `URLSession`, a
+    /// `Task.checkCancellation()` call) fails right away. Brackets built with
+    /// ``init(acquire:uncancellableDispose:)`` are the exception.
+    ///
+    /// See <doc:Cancellation> for patterns that handle this.
     public func callAsFunction<T>(
         _ body: (R) async -> Result<T, E>
     ) async -> Result<T, E> {
