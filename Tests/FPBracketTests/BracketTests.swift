@@ -6,6 +6,7 @@ private enum TestError: Error, Equatable {
     case useFailed
     case disposeFailed
     case innerAcquireFailed
+    case innerDisposeFailed
 }
 
 private final class CallLog {
@@ -202,6 +203,72 @@ struct BracketTests {
             log.events == [
                 "acquire(outer)",
                 "acquire(inner)",
+                "dispose(outer, 1)",
+            ]
+        )
+    }
+
+    @Test("flatMap still releases outer when inner dispose fails; inner error wins")
+    func flatMapInnerDisposeFailureWins() {
+        let log = CallLog()
+        let outer = Bracket<Int, TestError>(
+            acquire: {
+                log.record("acquire(outer)")
+                return .success(1)
+            },
+            dispose: { r in
+                log.record("dispose(outer, \(r))")
+                return .failure(.disposeFailed)
+            }
+        )
+        let inner = Bracket<Int, TestError>(
+            acquire: {
+                log.record("acquire(inner)")
+                return .success(2)
+            },
+            dispose: { r in
+                log.record("dispose(inner, \(r))")
+                return .failure(.innerDisposeFailed)
+            }
+        )
+
+        let composed = outer.flatMap { _ in inner }
+        let result = composed { r in Result<Int, TestError>.success(r) }
+
+        #expect(result == .failure(.innerDisposeFailed))
+        #expect(
+            log.events == [
+                "acquire(outer)",
+                "acquire(inner)",
+                "dispose(inner, 2)",
+                "dispose(outer, 1)",
+            ]
+        )
+    }
+
+    @Test("flatMap returns outer dispose failure when inner releases cleanly")
+    func flatMapOuterDisposeFailure() {
+        let log = CallLog()
+        let outer = Bracket<Int, TestError>(
+            acquire: {
+                log.record("acquire(outer)")
+                return .success(1)
+            },
+            dispose: { r in
+                log.record("dispose(outer, \(r))")
+                return .failure(.disposeFailed)
+            }
+        )
+
+        let composed = outer.flatMap { _ in makeBracket("inner", log: log, resource: 2) }
+        let result = composed { r in Result<Int, TestError>.success(r) }
+
+        #expect(result == .failure(.disposeFailed))
+        #expect(
+            log.events == [
+                "acquire(outer)",
+                "acquire(inner)",
+                "dispose(inner, 2)",
                 "dispose(outer, 1)",
             ]
         )

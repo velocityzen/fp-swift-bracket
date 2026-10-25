@@ -6,6 +6,7 @@ private enum TestError: Error, Equatable {
     case useFailed
     case disposeFailed
     case innerAcquireFailed
+    case innerDisposeFailed
 }
 
 private actor CallLog {
@@ -195,6 +196,72 @@ struct BracketAsyncTests {
             await log.snapshot() == [
                 "acquire(outer)",
                 "acquire(inner)",
+                "dispose(outer, 1)",
+            ]
+        )
+    }
+
+    @Test("flatMap still releases outer when inner dispose fails; inner error wins")
+    func flatMapInnerDisposeFailureWins() async {
+        let log = CallLog()
+        let outer = BracketAsync<Int, TestError>(
+            acquire: {
+                await log.record("acquire(outer)")
+                return .success(1)
+            },
+            dispose: { r in
+                await log.record("dispose(outer, \(r))")
+                return .failure(.disposeFailed)
+            }
+        )
+        let inner = BracketAsync<Int, TestError>(
+            acquire: {
+                await log.record("acquire(inner)")
+                return .success(2)
+            },
+            dispose: { r in
+                await log.record("dispose(inner, \(r))")
+                return .failure(.innerDisposeFailed)
+            }
+        )
+
+        let composed = outer.flatMap { _ in inner }
+        let result = await composed { r in Result<Int, TestError>.success(r) }
+
+        #expect(result == .failure(.innerDisposeFailed))
+        #expect(
+            await log.snapshot() == [
+                "acquire(outer)",
+                "acquire(inner)",
+                "dispose(inner, 2)",
+                "dispose(outer, 1)",
+            ]
+        )
+    }
+
+    @Test("flatMap returns outer dispose failure when inner releases cleanly")
+    func flatMapOuterDisposeFailure() async {
+        let log = CallLog()
+        let outer = BracketAsync<Int, TestError>(
+            acquire: {
+                await log.record("acquire(outer)")
+                return .success(1)
+            },
+            dispose: { r in
+                await log.record("dispose(outer, \(r))")
+                return .failure(.disposeFailed)
+            }
+        )
+
+        let composed = outer.flatMap { _ in makeBracket("inner", log: log, resource: 2) }
+        let result = await composed { r in Result<Int, TestError>.success(r) }
+
+        #expect(result == .failure(.disposeFailed))
+        #expect(
+            await log.snapshot() == [
+                "acquire(outer)",
+                "acquire(inner)",
+                "dispose(inner, 2)",
                 "dispose(outer, 1)",
             ]
         )
