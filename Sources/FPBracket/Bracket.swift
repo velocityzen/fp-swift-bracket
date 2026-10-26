@@ -107,6 +107,34 @@ public struct Bracket<R, E: Error> {
         })
     }
 
+    /// Transforms the error type of both acquire and dispose, leaving the
+    /// resource and lifecycle untouched.
+    ///
+    /// Use it to line up error types before composing brackets from
+    /// different layers with ``flatMap(_:)`` or do-notation:
+    ///
+    /// ```swift
+    /// let withFile: Bracket<File, FileError> = …
+    /// let withDB: Bracket<DB, DBError> = …
+    ///
+    /// let withBoth = withFile
+    ///     .mapError(AppError.file)
+    ///     .flatMap { _ in withDB.mapError(AppError.db) }
+    /// ```
+    ///
+    /// The body passed to the resulting bracket returns `Result<T, F>`, so
+    /// body errors are already in the new type.
+    public func mapError<F: Error>(_ transform: @escaping (E) -> F) -> Bracket<R, F> {
+        let acquire = acquireResource
+        return Bracket<R, F>(acquireResource: {
+            acquire().mapError(transform).map { resource in
+                Resource(value: resource.value) {
+                    resource.release().mapError(transform)
+                }
+            }
+        })
+    }
+
     /// Chains a second Bracket whose acquire depends on this Bracket's resource.
     ///
     /// The combined Bracket owns **both** resources: acquire runs outer then inner;

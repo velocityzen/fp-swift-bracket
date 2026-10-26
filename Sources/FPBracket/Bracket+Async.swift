@@ -131,6 +131,38 @@ public struct BracketAsync<R, E: Error> {
         })
     }
 
+    /// Transforms the error type of both acquire and dispose, leaving the
+    /// resource and lifecycle untouched. Async counterpart of
+    /// ``Bracket/mapError(_:)``.
+    ///
+    /// Use it to line up error types before composing brackets from
+    /// different layers:
+    ///
+    /// ```swift
+    /// let withListener: BracketAsync<Listener, ServerError> = server.listener
+    /// let withStore: BracketAsync<Store, StoreError> = …
+    ///
+    /// let withHost = withListener
+    ///     .mapError(HostError.server)
+    ///     .flatMap { _ in withStore.mapError(HostError.store) }
+    ///
+    /// // Or widen to `any Error` to meet a ``throwing(acquire:dispose:)`` bracket:
+    /// let erased = withListener.mapError { $0 as any Error }
+    /// ```
+    ///
+    /// The body passed to the resulting bracket returns `Result<T, F>`, so
+    /// body errors are already in the new type.
+    public func mapError<F: Error>(_ transform: @escaping (E) -> F) -> BracketAsync<R, F> {
+        let acquire = acquireResource
+        return BracketAsync<R, F>(acquireResource: {
+            await acquire().mapError(transform).map { resource in
+                AsyncResource(value: resource.value) {
+                    await resource.release().mapError(transform)
+                }
+            }
+        })
+    }
+
     /// Chains a second BracketAsync whose acquire depends on this one's resource.
     ///
     /// Acquire order is outer-then-inner; release order is inner-then-outer.

@@ -55,6 +55,21 @@ let withFileAndDB = withFile.flatMap { file in withDB(file) }
 let withFileAndLock = withFile.tap { file in withLock(file) }
 ```
 
+### Mixing error types
+
+`flatMap` needs both brackets to share an error type. `mapError` converts a bracket's acquire and dispose errors, so brackets from different layers can be composed:
+
+```swift
+let withHost = server.listener                     // BracketAsync<Listener, ServerError>
+    .mapError(HostError.server)
+    .flatMap { _ in withStore.mapError(HostError.store) }  // BracketAsync<Store, HostError>
+
+// Or widen to `any Error` to compose with `BracketAsync.throwing` brackets
+let erased = server.listener.mapError { $0 as any Error }
+```
+
+The body of the composed bracket returns `Result<T, HostError>`, so `mapError` never touches body errors.
+
 ### Brackets without cleanup
 
 Not every step owns a resource. `fromAcquire` lifts a fallible computation into a bracket with a no-op dispose; `fromTask` does the same for Swift `Task`s on the async side:

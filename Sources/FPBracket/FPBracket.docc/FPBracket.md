@@ -27,6 +27,9 @@ let lines    = withFile { file in countLines(file) }
 
 - ``Bracket/map(_:)`` transforms the visible resource type without changing the
   underlying acquire / dispose.
+- ``Bracket/mapError(_:)`` transforms the error type of acquire and
+  dispose, so brackets from layers with different error types can be
+  composed.
 - ``Bracket/flatMap(_:)`` nests a second bracket inside the first. Acquire
   order is outer-then-inner; release order is inner-then-outer. If inner's
   acquire fails, outer is released before the failure is returned.
@@ -70,6 +73,7 @@ async cleanup.
 - ``Bracket/fromAcquire(_:)``
 - ``Bracket/callAsFunction(_:)``
 - ``Bracket/map(_:)``
+- ``Bracket/mapError(_:)``
 - ``Bracket/flatMap(_:)``
 - ``Bracket/tap(_:)``
 - ``Bracket/as(_:)``
@@ -96,6 +100,7 @@ async cleanup.
 - ``BracketAsync/fromTask(_:)->BracketAsync<R,Never>``
 - ``BracketAsync/callAsFunction(_:)``
 - ``BracketAsync/map(_:)``
+- ``BracketAsync/mapError(_:)``
 - ``BracketAsync/flatMap(_:)``
 - ``BracketAsync/tap(_:)``
 - ``BracketAsync/as(_:)``
