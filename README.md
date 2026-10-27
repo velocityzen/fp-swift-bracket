@@ -131,6 +131,8 @@ let rows = await withConnection { conn in
 
 `BracketAsyncDo<E>`, `.tap`, `.sequence()`, `.traverse(_:)` are all available on the async side.
 
+Brackets aren't `Sendable`, but they don't need to be: a `BracketAsync` runs acquire, use, and dispose on the caller's actor (its async API is `nonisolated(nonsending)`). You can call one straight from `@MainActor` code, such as an `@main` type's `main()`, without moving the work into a `nonisolated` helper.
+
 ### Wrapping throwing APIs
 
 Most SDKs expose `async throws` APIs. `BracketAsync.throwing` wraps them into a `BracketAsync<R, any Error>`, so a thrown error becomes the failure:

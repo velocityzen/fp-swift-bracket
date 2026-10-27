@@ -1,4 +1,4 @@
-// swift-tools-version: 6.2
+// swift-tools-version: 6.3
 // Standalone benchmark package: kept out of the library manifest so consumers
 // of FPBracket never resolve or build the benchmark harness.
 
@@ -6,8 +6,8 @@ import PackageDescription
 
 let package = Package(
     name: "fp-swift-bracket-benchmarks",
-    // ContinuousClock needs macOS 13; the library itself stays at 10.15.
-    platforms: [.macOS(.v13)],
+    // Matches the library's minimum, which follows fp-swift.
+    platforms: [.macOS(.v26)],
     dependencies: [
         .package(path: "..")
     ],
@@ -16,6 +16,9 @@ let package = Package(
             name: "FPBracketBenchmarks",
             dependencies: [
                 .product(name: "FPBracket", package: "fp-swift-bracket")
+            ],
+            swiftSettings: [
+                .enableUpcomingFeature("NonisolatedNonsendingByDefault")
             ]
         )
     ],
