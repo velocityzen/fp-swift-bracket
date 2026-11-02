@@ -6,7 +6,10 @@ struct BracketAsyncUncancellableDisposeTests {
 
     // MARK: - uncancellableDispose
 
-    @Test("uncancellableDispose escapes cancellation; cancellation-aware cleanup completes")
+    @Test(
+        "uncancellableDispose escapes cancellation; cancellation-aware cleanup completes",
+        .hangGuard
+    )
     func uncancellableDisposeCompletes() async {
         let log = CancellationLog()
         let started = Signal()
@@ -79,7 +82,7 @@ struct BracketAsyncUncancellableDisposeTests {
         #expect(await log.snapshot() == [])
     }
 
-    @Test("in a flatMap mix, only the uncancellable dispose escapes cancellation")
+    @Test("in a flatMap mix, only the uncancellable dispose escapes cancellation", .hangGuard)
     func uncancellableDisposeInFlatMap() async {
         let log = CancellationLog()
         let started = Signal()

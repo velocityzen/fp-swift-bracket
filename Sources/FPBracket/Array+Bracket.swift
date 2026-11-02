@@ -1,5 +1,3 @@
-import FP
-
 // MARK: - Array.sequence() / .traverse(_:) for Bracket
 
 public extension Array {
@@ -30,25 +28,87 @@ public extension Array {
     /// builds `rs + [r]` inside a captured closure: `rs` is captured by value,
     /// and `+ [r]` allocates a fresh array of length `k+1` and copies the
     /// previous `k` elements. Repeated N times that's `0 + 1 + … + (N-1) =
-    /// O(N²)` array copies on top of the O(N) acquire/release work.
+    /// O(N²)` array copies on top of the O(N) acquire/release work. A chain
+    /// of N scopes would also nest N calls deep on the stack.
     ///
-    /// The imperative form below threads two mutable arrays (`values`,
-    /// `releases`) and is O(N) end-to-end at the cost of reaching into
-    /// `Bracket`'s module-internal storage (`Resource` and
-    /// `Bracket.init(acquireResource:)`). The trade-off is worth it because
-    /// `sequence` is the one place we expect to handle larger N (think:
-    /// opening dozens of connections in parallel-then-scoped patterns).
+    /// When every bracket is an acquire/dispose pair, the result is one too:
+    /// a call acquires into a single array of values and disposes each value
+    /// with its own bracket's `dispose`, allocating only that array. Otherwise
+    /// each bracket hands back its release, which allocates one closure per
+    /// bracket, and the releases run from a second array.
+    @inlinable
     func sequence<R, E>() -> Bracket<[R], E> where Element == Bracket<R, E> {
+        guard allSatisfy(\.isDirect) else {
+            return sequenceResources()
+        }
         let brackets = self
-        return Bracket<[R], E>(acquireResource: {
+
+        return Bracket<[R], E>(
+            acquire: {
+                var values: [R] = []
+                values.reserveCapacity(brackets.count)
+
+                // Acquire left-to-right. On the first failure, dispose
+                // everything already acquired, in reverse order, and
+                // propagate the error.
+                for bracket in brackets {
+                    switch bracket.directAcquire() {
+                        case .failure(let error):
+                            for index in values.indices.reversed() {
+                                _ = brackets[index].directDispose(values[index])
+                            }
+                            return .failure(error)
+                        case .success(let value):
+                            values.append(value)
+                    }
+                }
+                return .success(values)
+            },
+            dispose: { values in
+                // Dispose in reverse acquire order. Keep the first error
+                // (the most recently acquired bracket's, matching the
+                // flatMap-chain semantics); still run the remaining disposes
+                // for cleanup.
+                var firstError: E?
+                for index in values.indices.reversed() {
+                    if case .failure(let error) = brackets[index].directDispose(values[index]),
+                        firstError == nil
+                    {
+                        firstError = error
+                    }
+                }
+                return firstError.map { .failure($0) } ?? .success(())
+            }
+        )
+    }
+
+    /// Maps each element to a Bracket and sequences them.
+    /// Equivalent to `map(transform).sequence()`.
+    ///
+    /// ```swift
+    /// let withFiles: Bracket<[File], MyError> = paths
+    ///     .traverse { path in withFile(path) }
+    /// ```
+    @inlinable
+    func traverse<R, E>(
+        _ transform: (Element) -> Bracket<R, E>
+    ) -> Bracket<[R], E> {
+        map(transform).sequence()
+    }
+}
+
+extension Array {
+    /// `sequence()` for brackets that aren't all acquire/dispose pairs.
+    @inlinable
+    func sequenceResources<R, E>() -> Bracket<[R], E> where Element == Bracket<R, E> {
+        let brackets = self
+        let acquireResource: () -> Result<Resource<[R], E>, E> = {
             var values: [R] = []
             values.reserveCapacity(brackets.count)
 
             var releases: [() -> Result<Void, E>] = []
             releases.reserveCapacity(brackets.count)
 
-            // Acquire left-to-right. On the first failure, release everything
-            // already acquired (in reverse order) and propagate the error.
             for bracket in brackets {
                 switch bracket.acquireResource() {
                     case .failure(let error):
@@ -62,10 +122,6 @@ public extension Array {
                 }
             }
 
-            // Combined release: run every dispose in reverse acquire order.
-            // Keep the first error encountered (= the most recently acquired
-            // bracket's dispose error, matching the flatMap-chain semantics);
-            // still run the remaining disposes for cleanup.
             let combinedRelease: () -> Result<Void, E> = {
                 var firstError: E?
                 for release in releases.reversed() {
@@ -77,20 +133,20 @@ public extension Array {
             }
 
             return .success(Resource(value: values, release: combinedRelease))
-        })
-    }
+        }
 
-    /// Maps each element to a Bracket and sequences them.
-    /// Equivalent to `map(transform).sequence()`.
-    ///
-    /// ```swift
-    /// let withFiles: Bracket<[File], MyError> = paths
-    ///     .traverse { path in withFile(path) }
-    /// ```
-    func traverse<R, E>(
-        _ transform: (Element) -> Bracket<R, E>
-    ) -> Bracket<[R], E> {
-        map(transform).sequence()
+        return Bracket<[R], E>(
+            scope: { body in
+                switch acquireResource() {
+                    case .failure(let error):
+                        return .failure(error)
+                    case .success(let resource):
+                        body(resource.value)
+                        return resource.release()
+                }
+            },
+            acquireResource: acquireResource
+        )
     }
 }
 
@@ -99,10 +155,64 @@ public extension Array {
 public extension Array {
     /// Async variant of ``Swift/Array/sequence()->Bracket<[R],E>`` for BracketAsync.
     /// See that overload for the rationale behind the imperative implementation.
+    @inlinable
     func sequence<R, E>() -> BracketAsync<[R], E>
     where Element == BracketAsync<R, E> {
+        guard allSatisfy(\.isDirect) else {
+            return sequenceResources()
+        }
         let brackets = self
-        return BracketAsync<[R], E>(acquireResource: {
+
+        return BracketAsync<[R], E>(
+            acquire: {
+                var values: [R] = []
+                values.reserveCapacity(brackets.count)
+
+                for bracket in brackets {
+                    switch await bracket.directAcquire() {
+                        case .failure(let error):
+                            for index in values.indices.reversed() {
+                                _ = await brackets[index].directDispose(values[index])
+                            }
+                            return .failure(error)
+                        case .success(let value):
+                            values.append(value)
+                    }
+                }
+                return .success(values)
+            },
+            dispose: { values in
+                var firstError: E?
+                for index in values.indices.reversed() {
+                    if case .failure(let error) = await brackets[index].directDispose(
+                        values[index]
+                    ),
+                        firstError == nil
+                    {
+                        firstError = error
+                    }
+                }
+                return firstError.map { .failure($0) } ?? .success(())
+            }
+        )
+    }
+
+    /// Async variant of ``Swift/Array/traverse(_:)->Bracket<[R],E>`` for BracketAsync.
+    @inlinable
+    func traverse<R, E>(
+        _ transform: (Element) -> BracketAsync<R, E>
+    ) -> BracketAsync<[R], E> {
+        map(transform).sequence()
+    }
+}
+
+extension Array {
+    /// `sequence()` for async brackets that aren't all acquire/dispose pairs.
+    @inlinable
+    func sequenceResources<R, E>() -> BracketAsync<[R], E>
+    where Element == BracketAsync<R, E> {
+        let brackets = self
+        let acquireResource: () async -> Result<AsyncResource<[R], E>, E> = {
             var values: [R] = []
             values.reserveCapacity(brackets.count)
 
@@ -133,13 +243,19 @@ public extension Array {
             }
 
             return .success(AsyncResource(value: values, release: combinedRelease))
-        })
-    }
+        }
 
-    /// Async variant of ``Swift/Array/traverse(_:)->Bracket<[R],E>`` for BracketAsync.
-    func traverse<R, E>(
-        _ transform: (Element) -> BracketAsync<R, E>
-    ) -> BracketAsync<[R], E> {
-        map(transform).sequence()
+        return BracketAsync<[R], E>(
+            scope: { body in
+                switch await acquireResource() {
+                    case .failure(let error):
+                        return .failure(error)
+                    case .success(let resource):
+                        await body(resource.value)
+                        return await resource.release()
+                }
+            },
+            acquireResource: acquireResource
+        )
     }
 }

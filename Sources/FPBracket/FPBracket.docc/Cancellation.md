@@ -174,7 +174,9 @@ an actor holding a `CheckedContinuation`:
 let task = Task {
     await withConnection { conn in
         await started.fire()                // tell the test we're inside
-        try? await Task.sleep(nanoseconds: 60_000_000_000)
+        while !Task.isCancelled {           // only a cancellation ends this
+            try? await Task.sleep(for: .seconds(10))
+        }
         return .failure(.cancelled)
     }
 }
@@ -183,5 +185,13 @@ await started.wait()
 task.cancel()
 let result = await task.value               // dispose has already run here
 ```
+
+Wait in a loop rather than with one long sleep: on a slow machine, such as a
+CI simulator, a sleep can finish before the cancellation arrives.
+
+If the cancellation never comes, the loop never ends. A `.timeLimit` trait
+records that failure, but it can't end the test: it cancels the test's own
+task, which the unstructured `Task` above doesn't inherit. To fail rather
+than hang, also stop the loop once the time limit has passed.
 
 The package's own `BracketAsyncCancellationTests` use this approach.

@@ -179,13 +179,15 @@ Full API reference: [swiftpackageindex.com/velocityzen/fp-swift-bracket/document
 
 ## Benchmarks
 
-A small dependency-free benchmark harness lives in `Benchmarks/` — a separate package, so library consumers never resolve it:
+Every operator is `@inlinable`, so each call site gets a version specialized for its own types. A call allocates nothing of its own and costs about the same as the acquire/use/release you would write by hand. Composed brackets (`flatMap`, `tap`, do-notation) keep their resources on the stack, not in the heap.
+
+Benchmarks live in `Benchmarks/`, a separate package, so library consumers never resolve it. Each operator runs next to a hand-written baseline doing the same job, and every value is per call: time, instructions, allocations, and retains and releases. Run them from that directory:
 
 ```sh
-swift run --package-path Benchmarks -c release FPBracketBenchmarks
+swift package benchmark
 ```
 
-It reports medians for `Array.sequence` at N = 10 / 100 / 1000 (the per-element cost should stay flat — that's the documented O(N) implementation at work), nested `flatMap` chains, and the per-call overhead of `Bracket` / `BracketAsync`. CI runs it in `--quick` mode as a smoke test.
+CI benchmarks every push to `main` against the commit it was pushed on top of, and every pull request against its base, and fails when an allocation or ARC count regresses. See [Benchmarks/README.md](Benchmarks/README.md).
 
 ## Note on trailing-closure syntax
 

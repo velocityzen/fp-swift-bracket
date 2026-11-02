@@ -1,13 +1,13 @@
 {
-  "originHash" : "0c67604a5668669c4c11f2bf36456067f5655053cd577608d4ec3c76ae418230",
+  "originHash" : "902d6c1459bee7acd5ee0ed022c64b0d6345f8bdbe4eea40f6776924b67aff72",
   "pins" : [
     {
       "identity" : "fp-swift",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/velocityzen/fp-swift",
       "state" : {
-        "revision" : "b6878496d2b44600af5f57678fba74d90c681095",
-        "version" : "4.0.0"
+        "revision" : "807c45c000a42c803f72313dbdffc9ab731bba88",
+        "version" : "4.2.1"
       }
     }
   ],

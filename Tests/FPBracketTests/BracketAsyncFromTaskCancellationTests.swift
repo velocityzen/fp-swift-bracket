@@ -6,7 +6,7 @@ struct BracketAsyncFromTaskCancellationTests {
 
     // MARK: - fromTask forwards cancellation
 
-    @Test("fromTask (typed Result) cancels its task when the caller is cancelled")
+    @Test("fromTask (typed Result) cancels its task when the caller is cancelled", .hangGuard)
     func fromTaskTypedForwardsCancellation() async {
         let started = Signal()
 
@@ -27,7 +27,7 @@ struct BracketAsyncFromTaskCancellationTests {
         #expect(await task.value == .success(true))
     }
 
-    @Test("fromTask (throwing) surfaces CancellationError when the caller is cancelled")
+    @Test("fromTask (throwing) surfaces CancellationError when the caller is cancelled", .hangGuard)
     func fromTaskThrowingForwardsCancellation() async {
         let started = Signal()
 
@@ -35,7 +35,8 @@ struct BracketAsyncFromTaskCancellationTests {
             let bracket = BracketAsync<Int, Error>.fromTask {
                 Task {
                     await started.fire()
-                    try await Task.sleep(nanoseconds: 60 * 1_000_000_000)
+                    await suspendUntilCancelled()
+                    try Task.checkCancellation()
                     return 1
                 }
             }
@@ -53,7 +54,7 @@ struct BracketAsyncFromTaskCancellationTests {
         }
     }
 
-    @Test("fromTask (non-failing) cancels its task when the caller is cancelled")
+    @Test("fromTask (non-failing) cancels its task when the caller is cancelled", .hangGuard)
     func fromTaskNeverForwardsCancellation() async {
         let started = Signal()
 
@@ -74,7 +75,7 @@ struct BracketAsyncFromTaskCancellationTests {
         #expect(await task.value == .success(true))
     }
 
-    @Test("fromTask cancels its task immediately when the caller is already cancelled")
+    @Test("fromTask cancels its task immediately when the caller is already cancelled", .hangGuard)
     func fromTaskAlreadyCancelled() async {
         let task = Task {
             withUnsafeCurrentTask { $0?.cancel() }

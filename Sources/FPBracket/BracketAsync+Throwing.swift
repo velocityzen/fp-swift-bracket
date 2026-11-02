@@ -21,6 +21,7 @@ public extension BracketAsync where E == any Error {
     /// body's outcome. Under cancellation, a `dispose` that awaits
     /// cancellation-aware work throws `CancellationError`, which then
     /// becomes the result; see <doc:Cancellation>.
+    @inlinable
     static func throwing(
         acquire: @escaping () async throws -> R,
         dispose: @escaping (R) async throws -> Void

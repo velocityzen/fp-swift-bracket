@@ -6,7 +6,7 @@ struct BracketAsyncCancellationTests {
 
     // MARK: - release guarantees
 
-    @Test("cancelling during body still releases exactly once, in the cancelled task")
+    @Test("cancelling during body still releases exactly once, in the cancelled task", .hangGuard)
     func cancelDuringBody() async {
         let log = CancellationLog()
         let started = Signal()
@@ -45,7 +45,7 @@ struct BracketAsyncCancellationTests {
 
     // MARK: - composition under cancellation
 
-    @Test("cancelling during flatMap's inner acquire releases the outer resource")
+    @Test("cancelling during flatMap's inner acquire releases the outer resource", .hangGuard)
     func cancelDuringFlatMapInnerAcquire() async {
         let log = CancellationLog()
         let started = Signal()
@@ -72,7 +72,7 @@ struct BracketAsyncCancellationTests {
         )
     }
 
-    @Test("cancelling during flatMap's body releases inner then outer")
+    @Test("cancelling during flatMap's body releases inner then outer", .hangGuard)
     func cancelDuringFlatMapBody() async {
         let log = CancellationLog()
         let started = Signal()
@@ -101,7 +101,7 @@ struct BracketAsyncCancellationTests {
         )
     }
 
-    @Test("cancelling during sequence acquire releases acquired resources in reverse")
+    @Test("cancelling during sequence acquire releases acquired resources in reverse", .hangGuard)
     func cancelDuringSequenceAcquire() async {
         let log = CancellationLog()
         let started = Signal()

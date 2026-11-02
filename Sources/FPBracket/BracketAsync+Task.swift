@@ -25,6 +25,7 @@ public extension BracketAsync {
     ///     Task { await api.fetchUser() }  // Task<Result<User, APIError>, Never>
     /// }
     /// ```
+    @inlinable
     static func fromTask(
         _ makeTask: @escaping () -> Task<Result<R, E>, Never>
     ) -> BracketAsync<R, E> where R: Sendable, E: Sendable {
@@ -49,6 +50,7 @@ public extension BracketAsync where E == Error {
     ///     Task { try await api.fetchUser() }
     /// }
     /// ```
+    @inlinable
     static func fromTask(
         _ makeTask: @escaping () -> Task<R, Error>
     ) -> BracketAsync<R, Error> where R: Sendable {
@@ -66,6 +68,7 @@ public extension BracketAsync where E == Error {
 public extension BracketAsync where E == Never {
     /// A BracketAsync that runs a fresh non-failing `Task` per call;
     /// `dispose` is a no-op. Cancelling the caller cancels the task.
+    @inlinable
     static func fromTask(
         _ makeTask: @escaping () -> Task<R, Never>
     ) -> BracketAsync<R, Never> where R: Sendable {

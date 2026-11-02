@@ -143,6 +143,45 @@ struct BracketMapErrorTests {
             ]
         )
     }
+
+    @Test("mapError on a composed bracket transforms acquire and dispose failures")
+    func mapsComposedFailures() {
+        let log = CallLog()
+        let withFile = makeBracket("file", log: log, disposeError: FileError.closeFailed)
+        let withLock = makeBracket("lock", log: log, acquireError: FileError.openFailed)
+
+        let acquireFails = withFile.flatMap { _ in withLock }.mapError(AppError.file)
+        let disposeFails = withFile.map { $0 + "!" }.mapError(AppError.file)
+
+        #expect(acquireFails { r in .success(r) } == .failure(.file(.openFailed)))
+        #expect(disposeFails { r in .success(r) } == .failure(.file(.closeFailed)))
+        #expect(
+            log.events == [
+                "acquire(file)", "acquire(lock)", "dispose(file)",
+                "acquire(file)", "dispose(file)",
+            ]
+        )
+    }
+
+    @Test("mapError on a composed bracket transforms failures inside sequence()")
+    func mapsComposedFailuresInSequence() {
+        let log = CallLog()
+        let withDB = makeBracket("db", log: log, acquireError: AppError?.none)
+        let withFile = makeBracket("file", log: log, disposeError: FileError.closeFailed)
+        let withLock = makeBracket("lock", log: log, acquireError: FileError.openFailed)
+
+        let acquireFails = [withDB, withLock.map { $0 }.mapError(AppError.file)].sequence()
+        let disposeFails = [withDB, withFile.map { $0 }.mapError(AppError.file)].sequence()
+
+        #expect(acquireFails { r in .success(r) } == .failure(.file(.openFailed)))
+        #expect(disposeFails { r in .success(r) } == .failure(.file(.closeFailed)))
+        #expect(
+            log.events == [
+                "acquire(db)", "acquire(lock)", "dispose(db)",
+                "acquire(db)", "acquire(file)", "dispose(file)", "dispose(db)",
+            ]
+        )
+    }
 }
 
 @Suite("BracketAsync.mapError")
@@ -229,5 +268,44 @@ struct BracketAsyncMapErrorTests {
                 #expect(error as? FileError == .openFailed)
         }
         #expect(await log.snapshot() == ["acquire(file)"])
+    }
+
+    @Test("mapError on a composed bracket transforms acquire and dispose failures")
+    func mapsComposedFailures() async {
+        let log = AsyncLog()
+        let withFile = makeAsyncBracket("file", log: log, disposeError: FileError.closeFailed)
+        let withLock = makeAsyncBracket("lock", log: log, acquireError: FileError.openFailed)
+
+        let acquireFails = withFile.flatMap { _ in withLock }.mapError(AppError.file)
+        let disposeFails = withFile.map { $0 + "!" }.mapError(AppError.file)
+
+        #expect(await acquireFails { r in .success(r) } == .failure(.file(.openFailed)))
+        #expect(await disposeFails { r in .success(r) } == .failure(.file(.closeFailed)))
+        #expect(
+            await log.snapshot() == [
+                "acquire(file)", "acquire(lock)", "dispose(file)",
+                "acquire(file)", "dispose(file)",
+            ]
+        )
+    }
+
+    @Test("mapError on a composed bracket transforms failures inside sequence()")
+    func mapsComposedFailuresInSequence() async {
+        let log = AsyncLog()
+        let withDB = makeAsyncBracket("db", log: log, acquireError: AppError?.none)
+        let withFile = makeAsyncBracket("file", log: log, disposeError: FileError.closeFailed)
+        let withLock = makeAsyncBracket("lock", log: log, acquireError: FileError.openFailed)
+
+        let acquireFails = [withDB, withLock.map { $0 }.mapError(AppError.file)].sequence()
+        let disposeFails = [withDB, withFile.map { $0 }.mapError(AppError.file)].sequence()
+
+        #expect(await acquireFails { r in .success(r) } == .failure(.file(.openFailed)))
+        #expect(await disposeFails { r in .success(r) } == .failure(.file(.closeFailed)))
+        #expect(
+            await log.snapshot() == [
+                "acquire(db)", "acquire(lock)", "dispose(db)",
+                "acquire(db)", "acquire(file)", "dispose(file)", "dispose(db)",
+            ]
+        )
     }
 }

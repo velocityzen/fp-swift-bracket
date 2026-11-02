@@ -40,7 +40,7 @@ jobs:
           echo "$HOME/.swiftly/bin" >> "$GITHUB_PATH"
 
       - name: Lint
-        run: swift format lint --strict --recursive Sources Tests Benchmarks/Sources
+        run: swift format lint --strict --recursive Sources Tests Benchmarks/Sources Benchmarks/Benchmarks
 
       - name: Install SwiftLint
         run: brew install swiftlint
@@ -78,9 +78,6 @@ jobs:
 
       - name: Run tests
         run: swift test
-
-      - name: Benchmarks (smoke, quick mode)
-        run: swift run --package-path Benchmarks -c release FPBracketBenchmarks --quick
 
   test-simulators:
     name: Run ${{ matrix.platform }} Simulator Tests
