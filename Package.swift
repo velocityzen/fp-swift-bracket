@@ -16,7 +16,10 @@ let package = Package(
         )
     ],
     dependencies: [
-        .package(url: "https://github.com/velocityzen/fp-swift", from: "4.2.1")
+        .package(url: "https://github.com/velocityzen/fp-swift", from: "4.4.1"),
+        // Property-based tests. Test targets only, so FPBracket's users never
+        // fetch it.
+        .package(url: "https://github.com/velocityzen/hegel-swift", from: "0.51.1"),
     ],
     targets: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.`
@@ -35,6 +38,13 @@ let package = Package(
         .testTarget(
             name: "FPBracketTests",
             dependencies: ["FPBracket"]
+        ),
+        .testTarget(
+            name: "FPBracketPropertyTests",
+            dependencies: [
+                "FPBracket",
+                .product(name: "HegelTesting", package: "hegel-swift"),
+            ]
         ),
     ],
     swiftLanguageModes: [.v6]
