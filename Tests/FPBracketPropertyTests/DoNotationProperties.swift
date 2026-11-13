@@ -53,41 +53,65 @@
                 let outerOutcome = run(e, offset: combined(values), log: log) { value in
                     innerOutcome = runDo(steps.dropFirst(), values + [value], log: log, body)
                 }
-                if case .failure = innerOutcome { return innerOutcome }
-                return outerOutcome
+                return winner(inner: innerOutcome, outer: outerOutcome, log: log)
         }
     }
 
     enum DoGen {
-        static let step: Gen<DoStep> = .oneOf(
-            BracketGen.part.map { DoStep.bind($0) },
-            BracketGen.value.map { DoStep.let($0) }
-        )
+        static func step(_ policy: Policy) -> Gen<DoStep> {
+            .oneOf(
+                BracketGen.part(policy).map { DoStep.bind($0) },
+                BracketGen.value.map { DoStep.let($0) }
+            )
+        }
 
         /// Every arity the generated chains have: the flattening overloads up
         /// to 10 values, then the nested ones. Hegel keeps arrays short, so the
         /// long chains get their own branch.
-        static let steps: Gen<[DoStep]> = .oneOf(
-            .array(of: step, count: 1...maxDoSteps),
-            .array(of: step, count: 10...maxDoSteps)
-        )
+        static func steps(_ policy: Policy) -> Gen<[DoStep]> {
+            .oneOf(
+                .array(of: step(policy), count: 1...maxDoSteps),
+                .array(of: step(policy), count: 10...maxDoSteps)
+            )
+        }
+    }
+
+    /// Runs the model of a do-notation chain, and records what it went through.
+    func modelDo(
+        _ tc: TestCase,
+        _ steps: [DoStep],
+        body: Result<Int, Code>
+    ) throws -> (Result<Int, Code>, ModelLog) {
+        let log = ModelLog()
+        let expected = modelCall(body: body, log: log) { runDo(steps[...], [], log: log, $0) }
+        try recordReach(tc, nil, log, constructors: false)
+        if log.bodyRan, steps.count > 10 {
+            try tc.event(Reach.pastFlattening)
+        }
+        return (expected, log)
     }
 
     @Suite("Do-notation properties", .hegel)
     struct DoNotationProperties {
+        /// What both properties claim.
+        static let reaching = [
+            Reach.bodyRan, Reach.pastFlattening, Reach.rollback, Reach.releasesFailed,
+            Reach.innerBeatOuter,
+        ]
+
         /// `BracketDo` chains of any length, mixing `bind` and `let`, acquire and
         /// release like the nested `flatMap`s they stand for, and give every
         /// value to the body, in order.
-        @Test(.hegel(testCases: 1_000))
+        ///
+        /// Reach: the body getting more than 10 values, a rollback, and
+        /// release failures meeting.
+        @Test(.hegel(testCases: testCases(1_000)))
         func doChainsMatchTheModel() throws {
-            try property { tc in
-                let steps = try tc.draw(DoGen.steps, named: "steps")
+            try property(reaching: Self.reaching) { tc in
+                let policy = try tc.draw(BracketGen.policy, named: "policy")
+                let steps = try tc.draw(DoGen.steps(policy), named: "steps")
                 let body = try tc.draw(BracketGen.body, named: "body")
-                let modelLog = ModelLog()
-                let scope = runDo(steps[...], [], log: modelLog) {
-                    modelLog.entries.append("body \($0)")
-                }
-                let expected = scope.flatMap { body }
+                let (expected, modelLog) = try modelDo(tc, steps, body: body)
 
                 let log = Log()
                 let result = call(doChain(steps, log: log), body: body, log: log)
@@ -97,16 +121,13 @@
         }
 
         /// The same for `BracketAsyncDo`.
-        @Test(.hegel(testCases: 500))
+        @Test(.hegel(testCases: testCases(500)))
         func asyncDoChainsMatchTheModel() async throws {
-            try await property { tc in
-                let steps = try tc.draw(DoGen.steps, named: "steps")
+            try await property(reaching: Self.reaching) { tc in
+                let policy = try tc.draw(BracketGen.policy, named: "policy")
+                let steps = try tc.draw(DoGen.steps(policy), named: "steps")
                 let body = try tc.draw(BracketGen.body, named: "body")
-                let modelLog = ModelLog()
-                let scope = runDo(steps[...], [], log: modelLog) {
-                    modelLog.entries.append("body \($0)")
-                }
-                let expected = scope.flatMap { body }
+                let (expected, modelLog) = try modelDo(tc, steps, body: body)
 
                 let log = Log()
                 let result = await call(doChainAsync(steps, log: log), body: body, log: log)

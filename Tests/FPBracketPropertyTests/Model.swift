@@ -1,9 +1,6 @@
 // Hegel runs on macOS and Linux only; see Package.swift.
 #if os(macOS) || os(Linux)
 
-    import HegelTesting
-    import Synchronization
-
     // Random bracket expressions, built two ways: for real, from FPBracket, and as
     // a model that runs the documented semantics directly:
     //
@@ -15,7 +12,8 @@
     // - `Array.sequence()` behaves like the equivalent `flatMap` chain.
     //
     // Both sides log every acquire, dispose and body call, and the properties
-    // compare the logs and the outcomes.
+    // compare the logs and the outcomes. The model also notes what each call
+    // went through, for the properties' reach claims.
 
     struct Code: Error, Hashable, Sendable {
         let code: Int
@@ -49,13 +47,49 @@
     }
 
     /// How the async side builds a leaf. The sync side builds each the plain way.
-    enum LeafKind: Hashable, Sendable, CaseIterable {
+    enum LeafKind: String, Hashable, Sendable, CaseIterable {
         /// `init(acquire:dispose:)`.
         case plain
         /// `init(acquire:uncancellableDispose:)`.
         case uncancellable
         /// `throwing(acquire:dispose:)`, with `mapError` back to `Code`.
         case throwing
+
+        /// The async bracket's constructor, for event labels.
+        var label: String {
+            switch self {
+                case .plain: "init(acquire:dispose:)"
+                case .uncancellable: "init(acquire:uncancellableDispose:)"
+                case .throwing: "throwing(acquire:dispose:)"
+            }
+        }
+    }
+
+    /// How the async side builds a bracket that releases nothing. The sync
+    /// side builds each with `fromAcquire`.
+    enum FromKind: String, Hashable, Sendable, CaseIterable {
+        /// `fromAcquire`.
+        case acquire
+        /// `fromTask` with a `Task<Result<R, E>, Never>`.
+        case task
+        /// `fromTask` with a `Task<R, any Error>`, mapped back to `Code`.
+        case throwingTask
+        /// `fromTask` with a `Task<R, Never>`, mapped from `Never` to `Code`.
+        /// It can't fail.
+        case neverTask
+
+        /// The kinds that can fail.
+        static let failing: [FromKind] = [.acquire, .task, .throwingTask]
+
+        /// The async bracket's constructor, for event labels.
+        var label: String {
+            switch self {
+                case .acquire: "fromAcquire"
+                case .task: "fromTask (Result)"
+                case .throwingTask: "fromTask (throws)"
+                case .neverTask: "fromTask (Never)"
+            }
+        }
     }
 
     /// A bracket expression. The resource is an `Int`; a leaf's is its `id` plus
@@ -64,8 +98,12 @@
     indirect enum Expr: Hashable, Sendable, CustomStringConvertible {
         case leaf(id: Int, acquire: Outcome, dispose: Outcome, kind: LeafKind)
         case of(Int)
-        /// `fromAcquire`, or on the async side with `viaTask`, `fromTask`.
-        case fromAcquire(id: Int, Outcome, viaTask: Bool)
+        /// `fromAcquire`, or on the async side one of the `fromTask` overloads.
+        case fromAcquire(id: Int, Outcome, via: FromKind)
+        /// Async only: an acquire that runs until the caller is cancelled,
+        /// for checking that cancellation reaches it. Then it fails with
+        /// `Code(id)`, except through `neverTask`, which gives its resource.
+        case hang(id: Int, via: FromKind)
         case map(Expr, Int)
         case mapError(Expr, Int)
         case flatMap(Expr, Expr)
@@ -83,8 +121,9 @@
                     return
                         "leaf(\(id), acquire: \(a), dispose: \(d)\(kind == .plain ? "" : ", \(kind)"))"
                 case .of(let x): return "of(\(x))"
-                case .fromAcquire(let id, let a, let viaTask):
-                    return "\(viaTask ? "fromTask" : "fromAcquire")(\(id), \(a))"
+                case .fromAcquire(let id, let a, let via):
+                    return "from(\(id), \(a)\(via == .acquire ? "" : ", \(via)"))"
+                case .hang(let id, let via): return "hang(\(id), \(via))"
                 case .map(let e, let k): return "\(e).map(+\(k))"
                 case .mapError(let e, let k): return "\(e).mapError(+\(k))"
                 case .flatMap(let o, let i): return "\(o).flatMap { \(i) }"
@@ -96,6 +135,16 @@
                 case .unit(let e): return "\(e).asUnit()"
             }
         }
+
+        /// Whether the real bracket is an acquire/dispose pair, which
+        /// `sequence()` runs on its own path. `mapError` keeps a pair a pair.
+        var isDirect: Bool {
+            switch self {
+                case .leaf, .of, .fromAcquire, .hang: true
+                case .mapError(let e, _): e.isDirect
+                default: false
+            }
+        }
     }
 
     /// Folds resources into one `Int`, for `sequence` and do-notation.
@@ -105,10 +154,36 @@
 
     func pair(_ a: Int, _ b: Int) -> Int { a &* 31 &+ b }
 
+    /// What a `hang` gives once it is cancelled.
+    func hangOutcome(id: Int, via: FromKind) -> Outcome {
+        via == .neverTask ? .ok : .fail(id)
+    }
+
     // MARK: - The model
 
     final class ModelLog {
         var entries: [String] = []
+        /// What the call went through, as event labels.
+        var reached: Set<String> = []
+        /// What the async brackets' constructors went through, as event
+        /// labels. The sync side builds every leaf the same way.
+        var constructors: Set<String> = []
+        /// How many acquires succeeded.
+        var acquired = 0
+        /// Resources acquired and not yet released.
+        var held = 0
+        var releaseFailures = 0
+        var bodyRan = false
+        /// How many hangs ran.
+        var hangs = 0
+        /// The first hang: the index of its entry, and how it was built.
+        var firstHang: (entry: Int, via: FromKind)?
+
+        func acquireFailed() {
+            if held > 0 {
+                reached.insert(Reach.rollback)
+            }
+        }
     }
 
     /// Runs `e` the way the documented semantics say: acquires, calls `body`
@@ -120,22 +195,13 @@
         _ body: @escaping (Int) -> Void
     ) -> Result<Void, Code> {
         switch e {
-            case .leaf(let id, let acquire, let dispose, _):
-                log.entries.append("acquire \(id)")
-                // A failed acquire gives its failure, and nothing is released.
-                return acquire.value(id &+ offset).flatMap { value in
-                    body(value)
-                    log.entries.append("dispose \(id) \(value)")
-                    return dispose.void
-                }
+            case .leaf, .fromAcquire, .hang:
+                return runLeaf(e, offset: offset, log: log, body)
             case .of(let x):
                 body(x)
                 return .success(())
-            case .fromAcquire(let id, let acquire, _):
-                log.entries.append("acquire \(id)")
-                return acquire.value(id &+ offset).map { body($0) }
-            case .map(let e, let k):
-                return run(e, offset: offset, log: log) { body($0 &+ k) }
+            case .map, .constant, .unit:
+                return runMapped(e, offset: offset, log: log, body)
             case .mapError(let e, let k):
                 return run(e, offset: offset, log: log, body).mapError { Code(code: $0.code &+ k) }
             case .flatMap(let outer, let inner):
@@ -145,12 +211,96 @@
             case .bind(let outer, let inner):
                 return nested(outer, inner, offset: offset, log: log) { o, i in body(pair(o, i)) }
             case .sequence(let es, _):
-                return chain(es[...], [], offset: offset, log: log, body)
-            case .constant(let e, let k):
-                return run(e, offset: offset, log: log) { _ in body(k) }
-            case .unit(let e):
-                return run(e, offset: offset, log: log) { _ in body(0) }
+                return runSequence(es, offset: offset, log: log, body)
         }
+    }
+
+    /// A leaf: an acquire/dispose pair, or a bracket that releases nothing.
+    /// A failed acquire gives its failure, and nothing is released.
+    func runLeaf(
+        _ e: Expr,
+        offset: Int,
+        log: ModelLog,
+        _ body: (Int) -> Void
+    ) -> Result<Void, Code> {
+        switch e {
+            case .leaf(let id, let acquire, let dispose, let kind):
+                log.entries.append("acquire \(id)")
+                guard case .success(let value) = acquire.value(id &+ offset) else {
+                    log.acquireFailed()
+                    log.constructors.insert("\(kind.label): acquire failed")
+                    return acquire.void
+                }
+                log.acquired += 1
+                log.held += 1
+                body(value)
+                log.entries.append("dispose \(id) \(value)")
+                log.held -= 1
+                if case .fail = dispose {
+                    log.releaseFailures += 1
+                    log.constructors.insert("\(kind.label): release failed")
+                }
+                return dispose.void
+            case .fromAcquire(let id, let acquire, let via):
+                log.entries.append("acquire \(id)")
+                guard case .success(let value) = acquire.value(id &+ offset) else {
+                    log.acquireFailed()
+                    log.constructors.insert("\(via.label): failed")
+                    return acquire.void
+                }
+                log.acquired += 1
+                log.constructors.insert("\(via.label): succeeded")
+                body(value)
+                return .success(())
+            case .hang(let id, let via):
+                log.hangs += 1
+                if log.firstHang == nil {
+                    log.firstHang = (log.entries.count, via)
+                }
+                let outcome = hangOutcome(id: id, via: via)
+                return runLeaf(
+                    .fromAcquire(id: id, outcome, via: via),
+                    offset: offset,
+                    log: log,
+                    body
+                )
+            default:
+                preconditionFailure("not a leaf: \(e)")
+        }
+    }
+
+    /// `map`, `as` and `asUnit`: the same acquires and releases, with the
+    /// resource the body gets transformed.
+    func runMapped(
+        _ e: Expr,
+        offset: Int,
+        log: ModelLog,
+        _ body: @escaping (Int) -> Void
+    ) -> Result<Void, Code> {
+        switch e {
+            case .map(let e, let k):
+                run(e, offset: offset, log: log) { body($0 &+ k) }
+            case .constant(let e, let k):
+                run(e, offset: offset, log: log) { _ in body(k) }
+            case .unit(let e):
+                run(e, offset: offset, log: log) { _ in body(0) }
+            default:
+                preconditionFailure("not a resource transform: \(e)")
+        }
+    }
+
+    /// The failure that wins when an inner bracket ran inside an outer one:
+    /// the inner one's, over the outer release's.
+    func winner(
+        inner: Result<Void, Code>,
+        outer: Result<Void, Code>,
+        log: ModelLog
+    ) -> Result<Void, Code> {
+        guard case .failure = inner else { return outer }
+        if case .failure = outer {
+            log.reached.insert(Reach.innerBeatOuter)
+        }
+        return inner
     }
 
     /// `outer.flatMap(inner)`: the inner bracket's failure wins over the outer
@@ -166,28 +316,49 @@
         let outerOutcome = run(outer, offset: offset, log: log) { o in
             innerOutcome = run(inner, offset: o, log: log) { body(o, $0) }
         }
-        if case .failure = innerOutcome { return innerOutcome }
-        return outerOutcome
+        return winner(inner: innerOutcome, outer: outerOutcome, log: log)
     }
 
-    /// `sequence()` as the `flatMap` chain its documentation says it matches.
-    func chain(
-        _ rest: ArraySlice<Expr>,
-        _ values: [Int],
+    /// `sequence()` as the `flatMap` chain its documentation says it matches,
+    /// noting which of the real `sequence()`'s paths a rollback or release
+    /// failures happened on: all acquire/dispose pairs, or not.
+    func runSequence(
+        _ es: [Expr],
         offset: Int,
         log: ModelLog,
         _ body: @escaping (Int) -> Void
     ) -> Result<Void, Code> {
-        guard let first = rest.first else {
-            body(combined(values))
-            return .success(())
+        let direct = es.allSatisfy(\.isDirect)
+        let releaseFailures = log.releaseFailures
+        // The body runs inside the chain, and its releases aren't the
+        // sequence's.
+        var bodyReleaseFailures = 0
+
+        func chain(_ rest: ArraySlice<Expr>, _ values: [Int]) -> Result<Void, Code> {
+            guard let first = rest.first else {
+                let start = log.releaseFailures
+                body(combined(values))
+                bodyReleaseFailures += log.releaseFailures - start
+                return .success(())
+            }
+            var acquired = false
+            var innerOutcome: Result<Void, Code> = .success(())
+            let outerOutcome = run(first, offset: offset, log: log) { value in
+                acquired = true
+                innerOutcome = chain(rest.dropFirst(), values + [value])
+            }
+            if !acquired, !values.isEmpty {
+                // This bracket failed to acquire after others had.
+                log.reached.insert(direct ? Reach.directRollback : Reach.resourceRollback)
+            }
+            return winner(inner: innerOutcome, outer: outerOutcome, log: log)
         }
-        var innerOutcome: Result<Void, Code> = .success(())
-        let outerOutcome = run(first, offset: offset, log: log) { value in
-            innerOutcome = chain(rest.dropFirst(), values + [value], offset: offset, log: log, body)
+
+        let outcome = chain(es[...], [])
+        if log.releaseFailures - releaseFailures - bodyReleaseFailures >= 2 {
+            log.reached.insert(direct ? Reach.directReleasesFailed : Reach.resourceReleasesFailed)
         }
-        if case .failure = innerOutcome { return innerOutcome }
-        return outerOutcome
+        return outcome
     }
 
     /// What a call gives: the scope's failure, or else the body's result.
@@ -196,107 +367,28 @@
         body bodyResult: Result<Int, Code>,
         log: ModelLog
     ) -> Result<Int, Code> {
-        let scope = run(e, offset: 0, log: log) { value in log.entries.append("body \(value)") }
-        if case .failure(let error) = scope { return .failure(error) }
-        return bodyResult
+        modelCall(body: bodyResult, log: log) { body in run(e, offset: 0, log: log, body) }
     }
 
-    // MARK: - Generators
-
-    enum BracketGen {
-        /// Small values usually, so outcomes and logs are easy to read; any `Int`
-        /// sometimes, so the arithmetic wraps.
-        static let value: Gen<Int> = .oneOf(.int(in: 0...9), .int(), .element(of: [.max, .min]))
-
-        /// Mostly successes, so expressions run deep before something fails.
-        static let outcome: Gen<Outcome> = .oneOf(
-            .just(.ok),
-            .just(.ok),
-            .just(.ok),
-            value.map { Outcome.fail($0) }
-        )
-
-        /// Releases fail half the time, so precedence between release failures
-        /// is tested often.
-        static let release: Gen<Outcome> = .oneOf(.just(.ok), value.map { Outcome.fail($0) })
-
-        static let leaf: Gen<Expr> = .oneOf(
-            Hegel.zip(.int(), outcome, release, .element(of: LeafKind.allCases)).map {
-                Expr.leaf(id: $0, acquire: $1, dispose: $2, kind: $3)
-            },
-            value.map { Expr.of($0) },
-            Hegel.zip(.int(), outcome, .bool()).map {
-                Expr.fromAcquire(id: $0, $1, viaTask: $2)
-            }
-        )
-
-        /// Drawing an expression costs far more than running it, about the same
-        /// for each node, so the leaves are capped below Hegel's default of 100.
-        static let expr = expression(maxLeaves: 30)
-
-        /// A smaller expression, for the many a do-notation chain or a
-        /// `sequence()` holds.
-        static let part = expression(maxLeaves: 10)
-
-        static func expression(maxLeaves: Int) -> Gen<Expr> {
-            .recursive(maxLeaves: maxLeaves, leaf: leaf) { sub in
-                Gen.oneOf(
-                    Hegel.zip(sub, value).map { Expr.map($0, $1) },
-                    Hegel.zip(sub, value).map { Expr.mapError($0, $1) },
-                    Hegel.zip(sub, sub).map { Expr.flatMap($0, $1) },
-                    Hegel.zip(sub, sub).map { Expr.tap($0, $1) },
-                    Hegel.zip(sub, sub).map { Expr.bind($0, $1) },
-                    Hegel.zip(.array(of: sub), .bool()).map {
-                        Expr.sequence($0, traverse: $1)
-                    },
-                    Hegel.zip(sub, value).map { Expr.constant($0, $1) },
-                    sub.map { Expr.unit($0) }
-                )
+    /// What a call of the bracket `scope` runs gives.
+    func modelCall(
+        body bodyResult: Result<Int, Code>,
+        log: ModelLog,
+        _ scope: (_ body: @escaping (Int) -> Void) -> Result<Void, Code>
+    ) -> Result<Int, Code> {
+        let outcome = scope { value in
+            log.bodyRan = true
+            log.entries.append("body \(value)")
+        }
+        guard case .failure(let error) = outcome else { return bodyResult }
+        if log.bodyRan {
+            // Everything was acquired, so a release failed.
+            switch bodyResult {
+                case .success: log.reached.insert(Reach.releaseBeatSucceedingBody)
+                case .failure: log.reached.insert(Reach.releaseBeatFailingBody)
             }
         }
-
-        static let body: Gen<Result<Int, Code>> = .oneOf(
-            value.map { Result.success($0) },
-            value.map { Result.failure(Code(code: $0)) }
-        )
-    }
-
-    // MARK: - The real side's log
-
-    /// What the real brackets did, in order. Safe to use from any task.
-    final class Log: Sendable {
-        struct Dispose: Sendable {
-            let event: Int
-            let kind: LeafKind
-            let sawCancellation: Bool
-        }
-
-        private let state = Mutex<(entries: [String], disposes: [Dispose])>(([], []))
-        /// Called with each entry after it is added.
-        let onEntry: @Sendable (String) -> Void
-
-        init(onEntry: @escaping @Sendable (String) -> Void = { _ in }) {
-            self.onEntry = onEntry
-        }
-
-        func add(_ entry: String) {
-            state.withLock { $0.entries.append(entry) }
-            onEntry(entry)
-        }
-
-        /// Logs a dispose, and whether the task running it was cancelled.
-        func dispose(_ entry: String, kind: LeafKind) {
-            let sawCancellation = Task.isCancelled
-            state.withLock {
-                $0.disposes.append(
-                    Dispose(event: $0.entries.count, kind: kind, sawCancellation: sawCancellation)
-                )
-            }
-            add(entry)
-        }
-
-        var entries: [String] { state.withLock { $0.entries } }
-        var disposes: [Dispose] { state.withLock { $0.disposes } }
+        return .failure(error)
     }
 
 #endif

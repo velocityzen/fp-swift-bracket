@@ -2,8 +2,57 @@
 #if os(macOS) || os(Linux)
 
     import FPBracket
+    import HegelTesting
+    import Synchronization
+    import Testing
 
     // The real brackets for an `Expr`, logging what they do the way the model does.
+
+    // MARK: - The log
+
+    /// What the real brackets did, in order. Safe to use from any task.
+    final class Log: Sendable {
+        struct Dispose: Sendable {
+            let event: Int
+            let kind: LeafKind
+            let sawCancellation: Bool
+        }
+
+        private let state = Mutex<(entries: [String], disposes: [Dispose])>(([], []))
+        /// Called with each entry after it is added.
+        let onEntry: @Sendable (String) -> Void
+        /// What the `hang` leaves wait on.
+        let probe = CancellationProbe()
+        /// Whether the drawn cancel has landed, for the `hang` leaves.
+        let cancelLanded: @Sendable () -> Bool
+
+        init(
+            onEntry: @escaping @Sendable (String) -> Void = { _ in },
+            cancelLanded: @escaping @Sendable () -> Bool = { false }
+        ) {
+            self.onEntry = onEntry
+            self.cancelLanded = cancelLanded
+        }
+
+        func add(_ entry: String) {
+            state.withLock { $0.entries.append(entry) }
+            onEntry(entry)
+        }
+
+        /// Logs a dispose, and whether the task running it was cancelled.
+        func dispose(_ entry: String, kind: LeafKind) {
+            let sawCancellation = Task.isCancelled
+            state.withLock {
+                $0.disposes.append(
+                    Dispose(event: $0.entries.count, kind: kind, sawCancellation: sawCancellation)
+                )
+            }
+            add(entry)
+        }
+
+        var entries: [String] { state.withLock { $0.entries } }
+        var disposes: [Dispose] { state.withLock { $0.disposes } }
+    }
 
     // MARK: - Bracket
 
@@ -27,6 +76,8 @@
                     log.add("acquire \(id)")
                     return acquire.value(id &+ offset)
                 }
+            case .hang:
+                preconditionFailure("a hang has no sync bracket: it waits for a cancellation")
             case .map(let e, let k):
                 return bracket(e, offset: offset, log: log).map { $0 &+ k }
             case .mapError(let e, let k):
@@ -81,7 +132,7 @@
                 return leaf.bracket(kind)
             case .of(let x):
                 return .of(x)
-            case .fromAcquire(let id, let acquire, let viaTask):
+            case .fromAcquire(let id, let acquire, let via):
                 let leaf = AsyncLeaf(
                     id: id,
                     acquire: acquire,
@@ -89,7 +140,16 @@
                     offset: offset,
                     log: log
                 )
-                return leaf.fromAcquire(viaTask: viaTask)
+                return leaf.from(via)
+            case .hang(let id, let via):
+                let leaf = AsyncLeaf(
+                    id: id,
+                    acquire: hangOutcome(id: id, via: via),
+                    dispose: .ok,
+                    offset: offset,
+                    log: log
+                )
+                return leaf.hang(via)
             case .map(let e, let k):
                 return bracketAsync(e, offset: offset, log: log).map { $0 &+ k }
             case .mapError(let e, let k):
@@ -169,15 +229,76 @@
             }
         }
 
-        /// `fromAcquire`, or `fromTask` with `viaTask`, whose task does not
-        /// suspend first.
-        func fromAcquire(viaTask: Bool) -> BracketAsync<Int, Code> {
-            guard viaTask else { return .fromAcquire(acquireValue) }
-            return .fromTask {
-                Task {
-                    log.add("acquire \(id)")
-                    return acquire.value(id &+ offset)
-                }
+        /// A bracket that releases nothing, built `via` the given
+        /// constructor. A `fromTask` task logs its acquire at once, without
+        /// suspending first.
+        func from(_ via: FromKind) -> BracketAsync<Int, Code> {
+            from(via) {}
+        }
+
+        /// A bracket like `from(via)` whose acquire, once it has logged,
+        /// runs until its task is cancelled. Through `fromAcquire` that is
+        /// the caller's task; through `fromTask` it is the task `fromTask`
+        /// made, which only a forwarded cancellation reaches.
+        func hang(_ via: FromKind) -> BracketAsync<Int, Code> {
+            let probe = log.probe
+            let cancelLanded = log.cancelLanded
+            return from(via) {
+                // The drawn cancel lands by the first hang's acquire entry,
+                // which is logged before this. If it hasn't landed, it never
+                // will, and there is nothing to wait for. If it has, wait for
+                // it however long it takes: `endsWithin` reports a cancel
+                // that never arrives.
+                guard cancelLanded() else { return }
+                await probe.hang()
+            }
+        }
+
+        /// `from(via)`, running `wait` between logging the acquire and
+        /// ending it.
+        private func from(
+            _ via: FromKind,
+            wait: @escaping @Sendable () async -> Void
+        ) -> BracketAsync<Int, Code> {
+            let log = log
+            let entry = "acquire \(id)"
+            let outcome = acquire.value(id &+ offset)
+            switch via {
+                case .acquire:
+                    return .fromAcquire {
+                        await Task.yield()
+                        log.add(entry)
+                        await wait()
+                        return outcome
+                    }
+                case .task:
+                    return .fromTask {
+                        Task {
+                            log.add(entry)
+                            await wait()
+                            return outcome
+                        }
+                    }
+                case .throwingTask:
+                    return BracketAsync<Int, any Error>.fromTask {
+                        Task {
+                            log.add(entry)
+                            await wait()
+                            return try outcome.get()
+                        }
+                    }.mapError(thrownCode)
+                case .neverTask:
+                    // `mapError(thrownCode)` is never called. A closure
+                    // taking `Never` would be unreachable code, which the
+                    // compiler warns about.
+                    return BracketAsync<Int, Never>.fromTask {
+                        Task {
+                            log.add(entry)
+                            await wait()
+                            // The generators give `neverTask` only successes.
+                            return (try? outcome.get()) ?? 0
+                        }
+                    }.mapError(thrownCode)
             }
         }
     }
@@ -185,7 +306,8 @@
     /// The `Code` a throwing leaf threw: it throws nothing else.
     func thrownCode(_ error: any Error) -> Code {
         guard let code = error as? Code else {
-            preconditionFailure("a throwing leaf threw \(error), not a Code")
+            Issue.record("a throwing leaf threw \(error), not a Code")
+            return Code(code: .min)
         }
         return code
     }
