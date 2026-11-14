@@ -105,7 +105,7 @@
         ///
         /// Reach: the body getting more than 10 values, a rollback, and
         /// release failures meeting.
-        @Test(.hegel(testCases: testCases(1_000)))
+        @Test(.hegel(testCases: 1_000))
         func doChainsMatchTheModel() throws {
             try property(reaching: Self.reaching) { tc in
                 let policy = try tc.draw(BracketGen.policy, named: "policy")
@@ -121,7 +121,7 @@
         }
 
         /// The same for `BracketAsyncDo`.
-        @Test(.hegel(testCases: testCases(500)))
+        @Test(.hegel(testCases: 500))
         func asyncDoChainsMatchTheModel() async throws {
             try await property(reaching: Self.reaching) { tc in
                 let policy = try tc.draw(BracketGen.policy, named: "policy")

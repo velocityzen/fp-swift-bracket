@@ -30,9 +30,9 @@ public let checkedMetrics: [BenchmarkMetric] = [
 /// `baseline check` reports it.
 ///
 /// Every benchmark here allocates and retains the same way on every call, so
-/// two runs of the same code agree exactly. That includes `fromTask` and
-/// `uncancellableDispose`, which start exactly one task per call rather than
-/// starting them on demand. One allocation or retain more per call is at
+/// two runs of the same code agree exactly. That includes `fromTask`, which
+/// starts exactly one task per call rather than starting one on demand. One
+/// allocation or retain more per call is at
 /// least 5% of every count up to 20, and no count here is above 20: the
 /// largest, 14 retains and releases, is the eight-deep `flatMap` chain's.
 let checkedTolerance = 5.0

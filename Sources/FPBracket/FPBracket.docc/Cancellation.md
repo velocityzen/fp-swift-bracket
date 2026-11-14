@@ -66,15 +66,16 @@ let withTransaction = BracketAsync<Transaction, DBError>(
 )
 ```
 
-`uncancellableDispose` runs in a fresh unstructured `Task`, which doesn't inherit
-the caller's cancellation, so `Task.isCancelled` is `false` inside it. The
-bracket still awaits it, so the cleanup has finished by the time
-`await bracket { … }` returns.
+`uncancellableDispose` runs inside `withTaskCancellationShield`, which hides
+the caller's cancellation from it: `Task.isCancelled` is `false` inside it, and
+the cancellation-aware work it awaits runs to the end. It is still an ordinary
+dispose otherwise: it runs in the caller's task, on the caller's actor, so the
+resource needn't be `Sendable`, and it has finished by the time
+`await bracket { … }` returns. Once it returns, the cancellation is visible
+again.
 
 Trade-offs to keep in mind:
 
-- The resource and error types must be `Sendable`, and `uncancellableDispose`
-  must be a `@Sendable` closure.
 - The uncancellable work can't be stopped, so a hang inside it blocks the
   caller. If the cleanup talks to something that can stall, give it a
   timeout of its own.
@@ -83,8 +84,8 @@ Trade-offs to keep in mind:
   escape cancellation; the others still run their dispose in the cancelled
   task.
 
-To make only part of a dispose uncancellable, the same trick works by hand:
-wrap that part in `await Task { … }.value` inside a regular `dispose`.
+To make only part of a dispose uncancellable, shield that part by hand: wrap
+it in `await withTaskCancellationShield { … }` inside a regular `dispose`.
 
 ## Throwing disposes
 
@@ -105,8 +106,8 @@ let withSession = BracketAsync.throwing(
     }
 )
 
-// Or, when the close must complete (session must be Sendable):
-dispose: { session in try await Task { try await session.close() }.value }
+// Or, when the close must complete:
+dispose: { session in try await withTaskCancellationShield { try await session.close() } }
 ```
 
 ## Pattern: reacting to cancellation in the body

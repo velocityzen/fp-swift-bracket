@@ -13,7 +13,7 @@
         ///
         /// Reach: `Reach.model` — the body after many acquires, a rollback,
         /// every kind of failure precedence, and each of `sequence()`'s paths.
-        @Test(.hegel(testCases: testCases(2_000)))
+        @Test(.hegel(testCases: 2_000))
         func bracketsMatchTheModel() throws {
             try property(reaching: Reach.model) { tc in
                 let policy = try tc.draw(BracketGen.policy, named: "policy")
@@ -39,7 +39,7 @@
         /// `fromTask` overloads.
         ///
         /// Reach: `Reach.model`, and every constructor failing.
-        @Test(.hegel(testCases: testCases(1_000)))
+        @Test(.hegel(testCases: 1_000))
         func asyncBracketsMatchTheModel() async throws {
             try await property(reaching: Reach.model + Reach.constructors) { tc in
                 let policy = try tc.draw(BracketGen.policy, named: "policy")
@@ -72,7 +72,7 @@
         ///
         /// Reach: a cancel before the call starts, a cancelled dispose of
         /// each kind, and a hang of each kind cancelled.
-        @Test(.hegel(testCases: testCases(1_000)))
+        @Test(.hegel(testCases: 1_000))
         func cancellingTheCallerStillReleasesEverything() async throws {
             let reaching =
                 [Reach.cancelledBeforeStart]
@@ -87,12 +87,16 @@
                 try recordReach(tc, e, modelLog, constructors: true)
                 // Each log entry is a checkpoint: cancel after any of them, or
                 // before the first. A hang waits for the cancel, so it lands
-                // by the first hang's entry.
+                // by the first hang's entry. Until it does, a call that goes
+                // 5 s without logging anything has stalled: `endsWithin`
+                // only starts counting at the cancel, and a quarter of the
+                // runs never get one.
                 let lastCheckpoint =
                     modelLog.firstHang.map { $0.entry + 1 } ?? modelLog.entries.count
                 let run = try await tc.withRandomCancellation(
                     checkpoints: 0...lastCheckpoint,
-                    endsWithin: .seconds(5)
+                    endsWithin: .seconds(5),
+                    stallsAfter: .seconds(5)
                 ) { cancellation in
                     let log = Log(
                         onEntry: { cancellation.checkpoint($0) },
@@ -146,7 +150,7 @@
         ///
         /// Reach: no brackets, and on each of `sequence()`'s paths a rollback
         /// and release failures meeting; the body after many acquires.
-        @Test(.hegel(testCases: testCases(1_000)))
+        @Test(.hegel(testCases: 1_000))
         func sequenceIsTheFlatMapChain() async throws {
             let reaching = [
                 Reach.emptySequence, Reach.directSequence, Reach.resourceSequence,

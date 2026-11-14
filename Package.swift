@@ -1,4 +1,4 @@
-// swift-tools-version: 6.3
+// swift-tools-version: 6.4
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 
 import PackageDescription
@@ -6,7 +6,7 @@ import PackageDescription
 let package = Package(
     name: "fp-swift-bracket",
     platforms: [
-        .macOS(.v26), .iOS(.v26), .tvOS(.v26), .watchOS(.v26), .visionOS(.v26),
+        .macOS(.v27), .iOS(.v27), .tvOS(.v27), .watchOS(.v27), .visionOS(.v27),
     ],
     products: [
         // Products define the executables and libraries a package produces, making them visible to other packages.
@@ -16,10 +16,10 @@ let package = Package(
         )
     ],
     dependencies: [
-        .package(url: "https://github.com/velocityzen/fp-swift", from: "4.4.1"),
+        .package(url: "https://github.com/velocityzen/fp-swift", from: "4.4.2"),
         // Property-based tests. Test targets only, so FPBracket's users never
         // fetch it.
-        .package(url: "https://github.com/velocityzen/hegel-swift", from: "0.51.5"),
+        .package(url: "https://github.com/velocityzen/hegel-swift", from: "0.51.8"),
     ],
     targets: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.`

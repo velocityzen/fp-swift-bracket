@@ -1,4 +1,4 @@
-// swift-tools-version: 6.3
+// swift-tools-version: 6.4
 
 import PackageDescription
 
@@ -11,8 +11,8 @@ let swiftSettings: [SwiftSetting] = [
 // the benchmark package: run `swift package benchmark` from this directory.
 let package = Package(
     name: "fp-swift-bracket-benchmarks",
-    // Matches the library's minimum, which follows fp-swift.
-    platforms: [.macOS(.v26)],
+    // Matches the library's minimum: OS 27, for withTaskCancellationShield.
+    platforms: [.macOS(.v27)],
     dependencies: [
         .package(name: "fp-swift-bracket", path: ".."),
         .package(

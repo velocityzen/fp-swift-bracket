@@ -18,7 +18,7 @@ Entries marked `(baseline)` do the same job by hand: a plain `defer`, a manual a
 
 ## Running
 
-Requires Swift 6.3 or later. Malloc statistics come from the benchmark package's malloc interposer, so there is nothing to install.
+Requires Swift 6.4 or later. Malloc statistics come from the benchmark package's malloc interposer, so there is nothing to install.
 
 Run everything from this directory:
 

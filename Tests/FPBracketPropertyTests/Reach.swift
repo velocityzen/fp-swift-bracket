@@ -1,7 +1,6 @@
 // Hegel runs on macOS and Linux only; see Package.swift.
 #if os(macOS) || os(Linux)
 
-    import Foundation
     import HegelTesting
 
     // What the properties record with `tc.event`, and claim with
@@ -110,13 +109,6 @@
                 structure(o, asResource: asResource, into: &labels)
                 structure(i, asResource: asResource, into: &labels)
         }
-    }
-
-    /// `count` test cases, unless `HEGEL_TEST_CASES` asks for another
-    /// number. A `.hegel(testCases:)` trait otherwise wins over the
-    /// environment, which would keep a deep run at the per-test count.
-    func testCases(_ count: Int) -> Int {
-        ProcessInfo.processInfo.environment["HEGEL_TEST_CASES"].flatMap(Int.init) ?? count
     }
 
 #endif

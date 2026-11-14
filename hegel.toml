@@ -1,0 +1,11 @@
+# Hegel settings for the property tests in Tests/FPBracketPropertyTests.
+#
+# On a CI server Hegel picks its shipped `ci` profile: derandomized, so every
+# push and pull request sees the same inputs, with no failure database.
+#
+# The scheduled run (.github/workflows/property-tests.yml) selects `nightly`
+# with HEGEL_DEFAULT_PROFILE, so each night tries new inputs. Each property
+# sets its own number of test cases, which wins over a profile's test_cases,
+# so the run multiplies them with HEGEL_TEST_CASES_SCALE instead.
+[profiles.nightly]
+derandomize = false

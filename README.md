@@ -164,7 +164,7 @@ dispose: { conn in
     return await conn.closeGracefully()
 }
 
-// Must complete: make the dispose uncancellable (resource must be Sendable)
+// Must complete: shield the dispose from the caller's cancellation
 let withTransaction = BracketAsync<Transaction, DBError>(
     acquire: { await db.begin() },
     uncancellableDispose: { tx in await tx.rollbackIfOpen() }

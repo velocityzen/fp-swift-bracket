@@ -63,11 +63,13 @@ public struct BracketAsync<R, E: Error> {
 
     /// Builds a BracketAsync whose dispose can't be cancelled.
     ///
-    /// Same as ``init(acquire:dispose:)``, except `uncancellableDispose` runs in
-    /// a fresh unstructured `Task`, which doesn't inherit the caller's
-    /// cancellation. Cancellation-aware cleanup (network calls, `Task.sleep`)
-    /// therefore completes even when the caller is cancelled. The bracket
-    /// stays structured: it awaits the cleanup before returning.
+    /// Same as ``init(acquire:dispose:)``, except `uncancellableDispose` runs
+    /// inside `withTaskCancellationShield`, which hides the caller's
+    /// cancellation from it: `Task.isCancelled` is `false` there, and
+    /// cancellation-aware cleanup (network calls, `Task.sleep`) completes
+    /// even when the caller is cancelled. It still runs in the caller's task,
+    /// on the caller's actor, like any dispose. Once it returns, the
+    /// cancellation is visible again.
     ///
     /// Use it for cleanup that must finish, such as rolling back a remote
     /// transaction or releasing a distributed lock. That work can't
@@ -83,12 +85,12 @@ public struct BracketAsync<R, E: Error> {
     @inlinable
     public init(
         acquire: @escaping () async -> Result<R, E>,
-        uncancellableDispose: @escaping @Sendable (R) async -> Result<Void, E>
-    ) where R: Sendable, E: Sendable {
+        uncancellableDispose: @escaping (R) async -> Result<Void, E>
+    ) {
         self.init(
             acquire: acquire,
             dispose: { value in
-                await Task { await uncancellableDispose(value) }.value
+                await withTaskCancellationShield { await uncancellableDispose(value) }
             }
         )
     }
