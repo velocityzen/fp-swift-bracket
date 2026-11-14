@@ -13,11 +13,11 @@ Add to your `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/velocityzen/fp-swift-bracket", from: "1.0.0")
+    .package(url: "https://github.com/velocityzen/fp-swift-bracket", from: "3.0.0")
 ]
 ```
 
-Then add `FPBracket` to your target's dependencies.
+Then add `FPBracket` to your target's dependencies. It needs Swift 6.4 or later, and runs on macOS, iOS, tvOS, watchOS and visionOS 27 or later, and on Linux.
 
 ## Why
 
