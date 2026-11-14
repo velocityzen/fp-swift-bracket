@@ -134,13 +134,13 @@ jobs:
           xcodebuild -version
           swift --version
 
+      # On the first simulator of its kind that Xcode can test on and that
+      # boots: the image lists watches whose runtime Xcode can't use, and
+      # may repair the watchOS runtime while the job runs.
       - name: Run tests (${{ matrix.platform }} Simulator)
-        run: |
-          set -o pipefail
-          LINE=$(xcrun simctl list devices available | grep -m1 "${{ matrix.device-filter }}")
-          UDID=$(echo "$LINE" | grep -oE '[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}')
-          echo "Using simulator: $LINE"
-          xcodebuild test -scheme fp-swift-bracket -destination "id=$UDID,arch=arm64" | tail -60
+        env:
+          DEVICE: ${{ matrix.device-filter }}
+        run: .github/scripts/test-simulator.sh "$DEVICE"
 
   test-linux:
     name: Run Linux Tests (Swift ${{ matrix.swift }})
