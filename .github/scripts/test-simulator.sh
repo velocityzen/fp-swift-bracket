@@ -17,8 +17,8 @@ unsettled() {
     xcrun simctl runtime list | grep -E '\((Copying|Deleting|Mounting|Staging|Verifying|Processing)\)'
 }
 
-# Boots the first simulator named like `device` that Xcode can test on, and
-# prints its id.
+# Boots the first simulator named like `device` that Xcode can test on, newest
+# OS first, and prints its id.
 #
 # `-showdestinations` lists the simulators this Xcode can test on, each with
 # its architecture and OS; `simctl` also lists devices it can't, such as a
@@ -26,11 +26,18 @@ unsettled() {
 # architecture is nil"). Even a listed one can have a runtime that isn't
 # loaded: Xcode then sees "watchOS Simulator (null)" and runs nothing. Booting
 # loads it, or fails.
+#
+# The newest OS goes first because the older runtime is the one the image
+# repairs: Xcode can list a watch on watchOS 27.0 ahead of one on 27.2, and
+# 27.0 be unloaded before the tests run.
 boot() {
     local line id booted
     xcodebuild -showdestinations -scheme "$scheme" 2>/dev/null |
         sed '/Ineligible destinations/,$d' |
         grep -E "platform:[A-Za-z]+ Simulator, arch:arm64, id:[0-9A-F-]+, OS:[0-9.]+, name:[^}]*$device" |
+        awk '{ match($0, /OS:[0-9.]+/); print substr($0, RSTART + 3, RLENGTH - 3), $0 }' |
+        sort -s -k1,1Vr |
+        cut -d' ' -f2- |
         while IFS= read -r line; do
             id="$(echo "$line" | grep -oE '[0-9A-F]{8}(-[0-9A-F]{4}){3}-[0-9A-F]{12}')"
             if booted="$(xcrun simctl bootstatus "$id" -b 2>&1)"; then
@@ -50,7 +57,9 @@ boot() {
 #
 # The repair can also start once a watch has booted on the old image, and
 # unload it under the watch: Xcode then sees "watchOS Simulator (null)" and
-# runs nothing. That is tried again the same way; a test that fails is not.
+# runs nothing, or no longer finds the watch it was just given ("Unable to
+# find a destination matching"). That is tried again the same way; a test
+# that fails is not.
 results="$RUNNER_TEMP/tests.xcresult"
 output="$RUNNER_TEMP/xcodebuild.log"
 deadline=$((SECONDS + 1200))
@@ -79,7 +88,8 @@ while :; do
     status=0
     xcodebuild test -quiet -scheme "$scheme" -destination "id=$udid,arch=arm64" \
         -resultBundlePath "$results" 2>&1 | tee "$output" || status=$?
-    if [ "$status" -ne 0 ] && grep -qF "Simulator (null)" "$output" && [ "$SECONDS" -lt "$deadline" ]; then
+    if [ "$status" -ne 0 ] && grep -qE "Simulator \(null\)|Unable to find a destination matching" "$output" &&
+        [ "$SECONDS" -lt "$deadline" ]; then
         echo "The simulator's runtime was unloaded before the tests ran; trying again."
         xcrun simctl runtime list
         sleep 15
