@@ -165,11 +165,13 @@
                 // ones. The model and
                 // the `flatMap` chain nest a call per bracket, and with no
                 // failure to stop them early, many large brackets overflow
-                // a concurrency thread's stack.
+                // a concurrency thread's stack. So the pairs are capped like
+                // the small ones: left unbounded, a nightly run drew arrays
+                // of over 2,000, which doubled the run and nest that deep.
                 let es = try tc.draw(
                     .oneOf(
                         .array(of: BracketGen.part(policy), count: 0...10),
-                        .array(of: BracketGen.leaf(policy)),
+                        .array(of: BracketGen.leaf(policy), count: 0...64),
                         .array(of: BracketGen.expression(policy, maxLeaves: 3), count: 10...64)
                     ),
                     named: "brackets"
