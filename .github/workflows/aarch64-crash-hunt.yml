@@ -1,0 +1,118 @@
+name: aarch64 crash hunt
+
+# Run by hand only. The nightly property tests crash on Linux aarch64, and
+# only there: a libdispatch worker dereferences 0xffffffff89abcdef
+# (DISPATCH_OBJECT_LISTLESS) taken from the default-QoS global queue, the one
+# Swift Concurrency runs tasks and `Task.sleep` wake-ups on. It happened on
+# two of the first three nightly runs, and never in 24 runs on Apple Silicon,
+# so it is hunted on the runners it happens on.
+#
+# Each job runs the property tests `runs` times in a row with the nightly
+# settings: the whole suite as the nightly runs it, to measure how often it
+# crashes; the whole suite one test at a time, to see whether tests running
+# together matter; and each property alone, to find the one that triggers it.
+# Delete this workflow once it has.
+on:
+  workflow_dispatch:
+    inputs:
+      runs:
+        description: Runs per job; a job stops at its first crash
+        type: number
+        default: 3
+
+# The jobs only read the repository; none of them needs a write token.
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # The nightly run's settings; see property-tests.yml.
+  HEGEL_DEFAULT_PROFILE: nightly
+  HEGEL_TEST_CASES_SCALE: "20"
+
+jobs:
+  zizmor:
+    name: zizmor
+    uses: $/.github/workflows/zizmor.yml
+
+  hunt:
+    name: ${{ matrix.name }}
+    needs: zizmor
+    runs-on: ubuntu-24.04-arm
+    # The whole suite one test at a time is the slowest: about 15 minutes a
+    # run.
+    timeout-minutes: 90
+    container:
+      image: swift:6.4
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Whole suite
+            filter: FPBracketPropertyTests
+          - name: Whole suite, one test at a time
+            filter: FPBracketPropertyTests
+            serial: true
+          - name: bracketsMatchTheModel
+            filter: FPBracketPropertyTests.BracketProperties/bracketsMatchTheModel
+          - name: asyncBracketsMatchTheModel
+            filter: FPBracketPropertyTests.BracketProperties/asyncBracketsMatchTheModel
+          - name: cancellingTheCallerStillReleasesEverything
+            filter: FPBracketPropertyTests.BracketProperties/cancellingTheCallerStillReleasesEverything
+          - name: sequenceIsTheFlatMapChain
+            filter: FPBracketPropertyTests.BracketProperties/sequenceIsTheFlatMapChain
+          - name: doChainsMatchTheModel
+            filter: FPBracketPropertyTests.DoNotationProperties/doChainsMatchTheModel
+          - name: asyncDoChainsMatchTheModel
+            filter: FPBracketPropertyTests.DoNotationProperties/asyncDoChainsMatchTheModel
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Swift version
+        run: swift --version
+
+      - name: Build
+        run: swift build --build-tests
+
+      # Each run's output is folded into a group. A crash ends the job with
+      # the run it happened on; the backtrace is in that run's group.
+      - name: Property tests (${{ env.HEGEL_DEFAULT_PROFILE }} profile)
+        shell: bash
+        env:
+          RUNS: ${{ inputs.runs }}
+          FILTER: ${{ matrix.filter }}
+          SERIAL: ${{ matrix.serial || false }}
+        run: |
+          set -o pipefail
+          if ! [[ "$RUNS" =~ ^[1-9][0-9]*$ ]]; then
+            echo "::error::runs must be a positive whole number, not \"$RUNS\"."
+            exit 1
+          fi
+          args=(--skip-build --filter "$FILTER")
+          if [ "$SERIAL" = true ]; then
+            args+=(--no-parallel)
+          fi
+          for i in $(seq 1 "$RUNS"); do
+            log="$RUNNER_TEMP/run-$i.log"
+            echo "::group::Run $i of $RUNS"
+            status=0
+            HEGEL_STATISTICS=1 swift test "${args[@]}" 2>&1 | tee "$log" || status=$?
+            echo "::endgroup::"
+            if grep -qE "Program crashed|unexpected signal" "$log"; then
+              echo "::error::Run $i of $RUNS crashed."
+              grep -E "^\*\*\* |crashed:" "$log"
+              exit 1
+            fi
+            if [ "$status" -ne 0 ]; then
+              echo "::error::Run $i of $RUNS failed without crashing (exit $status)."
+              exit "$status"
+            fi
+            echo "Run $i of $RUNS passed."
+          done
