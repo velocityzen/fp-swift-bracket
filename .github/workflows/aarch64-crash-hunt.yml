@@ -7,18 +7,22 @@ name: aarch64 crash hunt
 # happened in 24 runs on Apple Silicon, so it is hunted on the runners it
 # happens on.
 #
-# So far the whole suite, its tests running together as the nightly runs
-# them, crashed 2 times in 6 runs; one test at a time, and each property
-# alone, never did in about as much time. So each job here runs the whole
-# suite with its tests together, `runs` times: once as the nightly does, to
-# measure how often it crashes, and once without each property, to find the
-# one it needs. A job runs every run, crash or not, and fails at the end if
-# any crashed. Delete this workflow once it has found the property.
+# So far: the whole suite, its tests running together, crashed in about one
+# run in four; one test at a time, and each property alone 3 times, never
+# did. Leaving out each property in turn, 8 runs each, every suite with
+# asyncDoChainsMatchTheModel crashed (12 of 48 runs) and the one without it
+# never did (0 of 8), which luck alone gives about 1 time in 10.
+#
+# So each job here runs asyncDoChainsMatchTheModel: alone, twice as many
+# runs, to see whether it needs other tests beside it; beside each other
+# property, to see which; and the whole suite without it once more, to see
+# that it then still never crashes. A job runs every run, crash or not, and
+# fails at the end if any crashed. Delete this workflow once it is settled.
 on:
   workflow_dispatch:
     inputs:
       runs:
-        description: Runs per job
+        description: Runs per job; the alone job runs twice as many
         type: number
         default: 8
 
@@ -51,19 +55,24 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # `filters` are the tests a run runs, any one of them matching;
+        # `skip` leaves some out; `factor` multiplies the runs.
         include:
-          - name: Whole suite
-          - name: Without bracketsMatchTheModel
-            skip: BracketProperties/bracketsMatchTheModel
-          - name: Without asyncBracketsMatchTheModel
-            skip: BracketProperties/asyncBracketsMatchTheModel
-          - name: Without cancellingTheCallerStillReleasesEverything
-            skip: BracketProperties/cancellingTheCallerStillReleasesEverything
-          - name: Without sequenceIsTheFlatMapChain
-            skip: BracketProperties/sequenceIsTheFlatMapChain
-          - name: Without doChainsMatchTheModel
-            skip: DoNotationProperties/doChainsMatchTheModel
-          - name: Without asyncDoChainsMatchTheModel
+          - name: asyncDoChainsMatchTheModel alone
+            filters: DoNotationProperties/asyncDoChainsMatchTheModel
+            factor: 2
+          - name: asyncDoChainsMatchTheModel and bracketsMatchTheModel
+            filters: DoNotationProperties/asyncDoChainsMatchTheModel BracketProperties/bracketsMatchTheModel
+          - name: asyncDoChainsMatchTheModel and asyncBracketsMatchTheModel
+            filters: DoNotationProperties/asyncDoChainsMatchTheModel BracketProperties/asyncBracketsMatchTheModel
+          - name: asyncDoChainsMatchTheModel and cancellingTheCallerStillReleasesEverything
+            filters: DoNotationProperties/asyncDoChainsMatchTheModel BracketProperties/cancellingTheCallerStillReleasesEverything
+          - name: asyncDoChainsMatchTheModel and sequenceIsTheFlatMapChain
+            filters: DoNotationProperties/asyncDoChainsMatchTheModel BracketProperties/sequenceIsTheFlatMapChain
+          - name: asyncDoChainsMatchTheModel and doChainsMatchTheModel
+            filters: DoNotationProperties/asyncDoChainsMatchTheModel DoNotationProperties/doChainsMatchTheModel
+          - name: Whole suite without asyncDoChainsMatchTheModel
+            filters: FPBracketPropertyTests
             skip: DoNotationProperties/asyncDoChainsMatchTheModel
 
     steps:
@@ -84,6 +93,8 @@ jobs:
         shell: bash
         env:
           RUNS: ${{ inputs.runs }}
+          FACTOR: ${{ matrix.factor || 1 }}
+          FILTERS: ${{ matrix.filters }}
           SKIP: ${{ matrix.skip }}
           NAME: ${{ matrix.name }}
         run: |
@@ -92,29 +103,33 @@ jobs:
             echo "::error::runs must be a positive whole number, not \"$RUNS\"."
             exit 1
           fi
-          args=(--skip-build --filter FPBracketPropertyTests)
+          runs=$((RUNS * FACTOR))
+          args=(--skip-build)
+          for filter in $FILTERS; do
+            args+=(--filter "$filter")
+          done
           if [ -n "$SKIP" ]; then
             args+=(--skip "$SKIP")
           fi
           crashed=() failed=()
-          for i in $(seq 1 "$RUNS"); do
+          for i in $(seq 1 "$runs"); do
             log="$RUNNER_TEMP/run-$i.log"
-            echo "::group::Run $i of $RUNS"
+            echo "::group::Run $i of $runs"
             status=0
             HEGEL_STATISTICS=1 swift test "${args[@]}" 2>&1 | tee "$log" || status=$?
             echo "::endgroup::"
             if grep -qE "Program crashed|unexpected signal" "$log"; then
               crashed+=("$i")
-              echo "::error::Run $i of $RUNS crashed."
+              echo "::error::Run $i of $runs crashed."
               grep -E "^\*\*\* |crashed:" "$log"
             elif [ "$status" -ne 0 ]; then
               failed+=("$i")
-              echo "::error::Run $i of $RUNS failed without crashing (exit $status)."
+              echo "::error::Run $i of $runs failed without crashing (exit $status)."
             else
-              echo "Run $i of $RUNS passed."
+              echo "Run $i of $runs passed."
             fi
           done
-          tally="$NAME: ${#crashed[@]} of $RUNS runs crashed${crashed:+ (${crashed[*]})}"
+          tally="$NAME: ${#crashed[@]} of $runs runs crashed${crashed:+ (${crashed[*]})}"
           tally+=", ${#failed[@]} failed without crashing${failed:+ (${failed[*]})}"
           echo "$tally"
           echo "- $tally" >> "$GITHUB_STEP_SUMMARY"
