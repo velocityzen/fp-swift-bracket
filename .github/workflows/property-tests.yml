@@ -98,8 +98,15 @@ jobs:
         include:
           - arch: x86_64
             runner: ubuntu-latest
+          # One test at a time. Run together, the properties crash here
+          # about one run in five, and only here: a libdispatch worker takes
+          # DISPATCH_OBJECT_LISTLESS for the head of the default-QoS global
+          # queue, a race under heavy load, not in this package's code. With
+          # one or two properties at a time it never crashed in 77 runs. It
+          # takes about 11 minutes instead of 5.
           - arch: aarch64
             runner: ubuntu-24.04-arm
+            serial: true
     container:
       image: swift:6.4
 
@@ -114,9 +121,15 @@ jobs:
 
       - name: Property tests (${{ env.HEGEL_DEFAULT_PROFILE }} profile)
         shell: bash
+        env:
+          SERIAL: ${{ matrix.serial || false }}
         run: |
           set -o pipefail
-          HEGEL_STATISTICS=1 swift test --filter FPBracketPropertyTests 2>&1 \
+          args=(--filter FPBracketPropertyTests)
+          if [ "$SERIAL" = true ]; then
+            args+=(--no-parallel)
+          fi
+          HEGEL_STATISTICS=1 swift test "${args[@]}" 2>&1 \
             | tee "$RUNNER_TEMP/property-tests.log"
 
       - name: Show failures
