@@ -16,7 +16,7 @@ let package = Package(
         )
     ],
     dependencies: [
-        .package(url: "https://github.com/velocityzen/fp-swift", from: "4.4.2"),
+        .package(url: "https://github.com/velocityzen/fp-swift", from: "4.7.0"),
         // Property-based tests. Test targets only, so FPBracket's users never
         // fetch it.
         .package(url: "https://github.com/velocityzen/hegel-swift", from: "0.51.8"),
